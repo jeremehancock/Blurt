@@ -20,6 +20,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     redirect('index.php');
 }
 
+// Opportunistic ephemeral cleanup (throttled, no cron needed).
+maybe_purge_expired();
+
 // Generic acknowledgement — we don't reveal whether anything changed.
 $thanks = 'Thanks — that blurt has been reported.';
 
@@ -48,7 +51,8 @@ if (!rate_limit_ok($authorHash)) {
 }
 
 $record = read_blurt_file($found['path']);
-if ($record === null) {
+if ($record === null || blurt_is_expired($record)) {
+    // Nothing (or nothing live) to report; acknowledge generically.
     set_flash('ok', $thanks);
     redirect('index.php');
 }

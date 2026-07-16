@@ -9,6 +9,9 @@ and drops in behind an existing Nginx Proxy Manager (NPM) reverse proxy.
 
 - A single post is a **blurt**.
 - The compose button is the verb: **Blurt**.
+- **Every blurt vanishes 24 hours after it's posted** — the feed is always
+  fresh, nothing lingers, and there's nothing to prune by hand. Ephemerality
+  is core to what Blurt is.
 - Each visitor gets an auto-generated per-session handle (e.g. `SwiftOtter42`)
   and accent color so posters are distinguishable — no logins, no usernames.
 
@@ -76,7 +79,7 @@ defaults and no secrets in source.
 | `APP_SALT`            | `change-me-in-production`| Salt mixed into the IP hash (`author_hash`). **Change this in production.** |
 | `TRUSTED_PROXIES`     | *(empty)*                | Comma-separated proxy IPs whose `X-Forwarded-For` header we trust (e.g. NPM's container/host IP). Empty = trust none. |
 | `SITE_TITLE`          | `Blurt`                  | Site name shown in the header and `<title>`. |
-| `SITE_TAGLINE`        | `A tiny anonymous public feed.` | Optional line under the header; set empty to hide. |
+| `SITE_TAGLINE`        | `Anonymous, and gone in 24 hours.` | Optional line under the header; set empty to hide. |
 
 ### Tunable constants
 
@@ -89,6 +92,8 @@ defaults and no secrets in source.
 | `RATE_WINDOW`          | `60`    | Rate-limit window in seconds. |
 | `HIDE_REPORT_THRESHOLD`| `3`     | Distinct reporters needed to auto-hide a blurt. |
 | `PER_PAGE`             | `20`    | Top-level blurts shown per feed page. |
+| `POST_TTL`             | `86400` | Blurt lifetime in seconds. Every blurt (replies included) is removed this long after it was posted. Default is 24 hours. |
+| `PURGE_INTERVAL`       | `60`    | Minimum seconds between expiry sweeps. Cleanup is lazy (no cron); this throttles how often a request triggers a sweep. |
 
 Rate limiting and report-dedupe key off an **IP-based hash**, never the session
 handle — so clearing a cookie won't dodge the limits.
@@ -146,7 +151,7 @@ blurt/
       app.js         optional enhancement (live char counter)
   lib/               <-- NOT web-accessible
     helpers.php      escaping, ids, IP resolution, security headers
-    storage.php      read/write/list/move/delete blurts; safe id->path
+    storage.php      read/write/list/move/delete blurts; safe id->path; expiry sweep
     moderation.php   blocklist, honeypot, time-trap, rate limit, normalization
     identity.php     per-session handle + color
     auth.php         admin session + CSRF helpers
@@ -195,6 +200,29 @@ chronologically:
 - Reaching `HIDE_REPORT_THRESHOLD` distinct reporters moves it to `data/hidden/`
   with `hidden_by = "reports"`.
 - An admin can hide, restore, or permanently delete any blurt at any time.
+
+### Ephemerality
+
+Every blurt lives for `POST_TTL` seconds (24 hours by default) and is then
+removed — this is a defining feature, not just cleanup.
+
+- **Lazy, no cron.** Expired blurts are swept away by ordinary web requests. A
+  throttled sweep (`PURGE_INTERVAL`, default 60s) scans `data/blurts/` and
+  `data/hidden/`, deletes anything past its lifetime, and also clears stale
+  per-client rate files. Nothing external needs to run — no cron, no worker,
+  no dependency to maintain. (If you prefer, you can still call
+  `php -r 'require "config.php"; purge_expired();'` from cron; it's not needed.)
+- **Never shows stale posts.** The feed and admin views also filter by
+  expiry directly, so an expired blurt never appears even in the brief window
+  before the next sweep deletes its file.
+- **Replies count too.** A reply lives 24 hours from when *it* was posted, and
+  you can't reply to a blurt that has already expired.
+- **Visible countdown.** Each blurt shows a subtle "vanishes in 23h" indicator
+  (kept live by `app.js` when JavaScript is on), and the compose box notes the
+  lifetime — so the ephemerality is always visible, never a surprise.
+
+Because everything self-expires, `data/` stays small on its own and backups
+are naturally short-lived.
 
 ### Security summary
 

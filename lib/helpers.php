@@ -243,3 +243,48 @@ function time_ago(int $ts): string
     }
     return date('M j, Y', $ts);
 }
+
+/**
+ * A short, on-brand label for how long until a blurt vanishes, e.g.
+ * "vanishes in 23h" / "vanishes in 8m" / "vanishing…". Reinforces the
+ * ephemeral identity. $expiresAt is a unix timestamp (created_at + POST_TTL).
+ */
+function expiry_label(int $expiresAt): string
+{
+    $remaining = $expiresAt - time();
+    if ($remaining <= 0) {
+        return 'vanishing…';
+    }
+    if ($remaining < 60) {
+        return 'vanishes in <1m';
+    }
+    if ($remaining < 3600) {
+        return 'vanishes in ' . (int) floor($remaining / 60) . 'm';
+    }
+    if ($remaining < 86400) {
+        return 'vanishes in ' . (int) floor($remaining / 3600) . 'h';
+    }
+    return 'vanishes in ' . (int) floor($remaining / 86400) . 'd';
+}
+
+/** Human phrase for the configured lifetime, e.g. "24 hours" / "90 minutes". */
+function ttl_phrase(): string
+{
+    $ttl = POST_TTL;
+    // Prefer hours for anything under two days, so the default 24h reads as
+    // "24 hours" (on brand) rather than "1 day".
+    if ($ttl % 3600 === 0 && $ttl < 172800) {
+        $h = intdiv($ttl, 3600);
+        return $h . ' ' . ($h === 1 ? 'hour' : 'hours');
+    }
+    if ($ttl % 86400 === 0) {
+        $d = intdiv($ttl, 86400);
+        return $d . ' ' . ($d === 1 ? 'day' : 'days');
+    }
+    if ($ttl % 3600 === 0) {
+        $h = intdiv($ttl, 3600);
+        return $h . ' ' . ($h === 1 ? 'hour' : 'hours');
+    }
+    $m = max(1, (int) round($ttl / 60));
+    return $m . ' ' . ($m === 1 ? 'minute' : 'minutes');
+}

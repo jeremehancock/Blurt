@@ -235,3 +235,108 @@ function delete_blurt(string $id): bool
     }
     return @unlink($found['path']);
 }
+
+// ---------------------------------------------------------------------------
+// Ephemerality: blurts live for POST_TTL seconds, then vanish. Cleanup is
+// lazy (no cron): a throttled sweep runs on ordinary requests. Display code
+// also filters expired blurts directly, so nothing stale is ever shown even
+// in the window between sweeps.
+// ---------------------------------------------------------------------------
+
+/** Unix timestamp at which a blurt expires (created_at + POST_TTL). */
+function blurt_expires_at(array $record): int
+{
+    return (int) ($record['created_at'] ?? 0) + POST_TTL;
+}
+
+/** True if the blurt is past its lifetime and should no longer be shown. */
+function blurt_is_expired(array $record, ?int $now = null): bool
+{
+    $now = $now ?? time();
+    return blurt_expires_at($record) <= $now;
+}
+
+/**
+ * Run the expiry sweep at most once per PURGE_INTERVAL seconds, tracked via a
+ * marker file. Safe to call at the top of any entrypoint; concurrent callers
+ * are harmless because deletion is idempotent.
+ */
+function maybe_purge_expired(): void
+{
+    storage_init();
+    $marker = DATA_PATH . '/.last_purge';
+    $now = time();
+    if (is_file($marker)) {
+        $last = (int) @file_get_contents($marker);
+        if ($now - $last < PURGE_INTERVAL) {
+            return;
+        }
+    }
+    // Claim the interval up-front so parallel requests don't all sweep.
+    @file_put_contents($marker, (string) $now, LOCK_EX);
+    purge_expired($now);
+}
+
+/**
+ * Delete every expired blurt from data/blurts/ and data/hidden/, plus any
+ * stale per-client rate files. Returns the number of blurts removed.
+ */
+function purge_expired(?int $now = null): int
+{
+    storage_init();
+    $now = $now ?? time();
+    $removed = 0;
+
+    foreach ([BLURTS_DIR, HIDDEN_DIR] as $dir) {
+        $names = @scandir($dir);
+        if ($names === false) {
+            continue;
+        }
+        foreach ($names as $name) {
+            if (substr($name, -5) !== '.json') {
+                continue;
+            }
+            $id = substr($name, 0, -5);
+            if (!blurt_id_valid($id)) {
+                continue;
+            }
+            $path = blurt_path($id, $dir, true);
+            if ($path === null) {
+                continue;
+            }
+            $record = read_blurt_file($path);
+            // Delete expired blurts, and also drop any unreadable/corrupt files.
+            if ($record === null || blurt_is_expired($record, $now)) {
+                if (@unlink($path)) {
+                    $removed++;
+                }
+            }
+        }
+    }
+
+    purge_stale_rate_files($now);
+    return $removed;
+}
+
+/**
+ * Remove per-client rate files that can no longer hold any live timestamps
+ * (untouched for longer than RATE_WINDOW). Keeps data/rate/ from growing
+ * without bound. Purely housekeeping.
+ */
+function purge_stale_rate_files(int $now): void
+{
+    $names = @scandir(RATE_DIR);
+    if ($names === false) {
+        return;
+    }
+    foreach ($names as $name) {
+        if (substr($name, -5) !== '.json') {
+            continue;
+        }
+        $path = RATE_DIR . '/' . $name;
+        $mtime = @filemtime($path);
+        if ($mtime !== false && ($now - $mtime) > RATE_WINDOW) {
+            @unlink($path);
+        }
+    }
+}

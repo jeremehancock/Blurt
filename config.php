@@ -49,7 +49,8 @@ function env_int(string $key, int $default): int
 define('SITE_TITLE', env_str('SITE_TITLE', 'Blurt'));
 
 // Optional short tagline under the header. Empty string hides it.
-define('SITE_TAGLINE', env_str('SITE_TAGLINE', 'A tiny anonymous public feed.'));
+// Ephemerality is core to Blurt's identity, so the default says so.
+define('SITE_TAGLINE', env_str('SITE_TAGLINE', 'Anonymous, and gone in 24 hours.'));
 
 // bcrypt/argon hash of the admin password (see README to generate one).
 // Empty by default: admin login is effectively disabled until you set this.
@@ -87,6 +88,15 @@ define('HIDE_REPORT_THRESHOLD', env_int('HIDE_REPORT_THRESHOLD', 3));
 
 // Top-level blurts shown per page in the feed.
 define('PER_PAGE', env_int('PER_PAGE', 20));
+
+// Ephemerality: how long (in seconds) a blurt lives before it's removed.
+// This is a defining feature of Blurt — every blurt vanishes POST_TTL seconds
+// after it was posted (replies included). Default: 24 hours.
+define('POST_TTL', env_int('POST_TTL', 86400));
+
+// Minimum seconds between expiry sweeps. Cleanup happens lazily on normal
+// requests (no cron needed); throttling avoids scanning on every hit.
+define('PURGE_INTERVAL', env_int('PURGE_INTERVAL', 60));
 
 // ---------------------------------------------------------------------------
 // Wire up shared library includes. Order matters: helpers first.

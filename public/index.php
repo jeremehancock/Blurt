@@ -16,14 +16,22 @@ ensure_identity();
 
 $flash = take_flash();
 
+// Blurts are ephemeral: sweep away anything past its lifetime (lazy, no cron).
+maybe_purge_expired();
+
 // ---------------------------------------------------------------------------
 // Build the threaded, paginated feed.
 // ---------------------------------------------------------------------------
 $all = load_all_visible();
 
+$now = time();
 $topLevel = [];
 $repliesByParent = [];
 foreach ($all as $rec) {
+    // Never show an expired blurt, even in the gap before the next sweep.
+    if (blurt_is_expired($rec, $now)) {
+        continue;
+    }
     if (($rec['parent_id'] ?? null) === null) {
         $topLevel[] = $rec;
     } else {
@@ -60,6 +68,7 @@ function render_blurt(array $rec, bool $isReply): void
     }
     $id = (string) ($rec['id'] ?? '');
     $created = (int) ($rec['created_at'] ?? 0);
+    $expiresAt = blurt_expires_at($rec);
     $reportCount = (int) ($rec['report_count'] ?? 0);
     $textHtml = render_blurt_text((string) ($rec['text'] ?? ''));
 
@@ -71,6 +80,10 @@ function render_blurt(array $rec, bool $isReply): void
     echo '<span class="blurt__dot" style="background-color:' . h($color) . '"></span>';
     echo '<span class="blurt__name">' . $name . '</span>';
     echo '<span class="blurt__time">' . h(time_ago($created)) . '</span>';
+    // Ephemeral countdown. Server renders a static value; app.js keeps it live
+    // via the data-expires attribute (both optional — purely informational).
+    echo '<span class="blurt__expiry" data-expires="' . (int) $expiresAt . '">'
+        . h(expiry_label($expiresAt)) . '</span>';
     if ($reportCount >= 1) {
         // Public badge only — never expose the count.
         echo '<span class="blurt__badge" title="This blurt has been reported">reported</span>';
@@ -155,12 +168,13 @@ function hp_field(): string
         <span class="compose__count" data-count aria-hidden="true"><?= (int) MAX_POST_LEN ?></span>
         <button type="submit" class="btn btn--primary">Blurt</button>
       </div>
+      <p class="compose__note">Every blurt vanishes <?= h(ttl_phrase()) ?> after it's posted.</p>
     </form>
   </section>
 
   <section class="feed">
     <?php if (empty($pageItems)): ?>
-      <p class="empty">No blurts yet. Be the first to blurt something.</p>
+      <p class="empty">Nothing here right now — everything vanishes within <?= h(ttl_phrase()) ?>. Be the first to blurt something.</p>
     <?php else: ?>
       <?php foreach ($pageItems as $item): ?>
         <div class="thread">

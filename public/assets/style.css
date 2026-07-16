@@ -126,6 +126,11 @@ html, body {
   font-size: 0.85rem;
 }
 .compose__count.is-over { color: var(--danger); font-weight: 600; }
+.compose__note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
 
 /* Honeypot — visually hidden but present in the DOM. */
 .hp {
@@ -203,6 +208,13 @@ html, body {
 }
 .blurt__name { font-weight: 700; font-size: 0.95rem; }
 .blurt__time { color: var(--muted); font-size: 0.85rem; }
+.blurt__expiry {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+  opacity: 0.85;
+}
+.blurt__expiry::before { content: "· "; font-style: normal; }
 .blurt__badge {
   background: var(--badge-bg);
   color: var(--badge-ink);

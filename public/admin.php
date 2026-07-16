@@ -21,6 +21,9 @@ start_app_session();
 $notice = null;
 $noticeType = 'ok';
 
+// Blurts are ephemeral; keep the admin views in step with the lazy sweep.
+maybe_purge_expired();
+
 // ---------------------------------------------------------------------------
 // Handle POST actions.
 // ---------------------------------------------------------------------------
@@ -129,6 +132,7 @@ function admin_row(array $rec, bool $hidden): void
     echo '<span class="blurt__dot" style="background-color:' . h($color) . '"></span>';
     echo '<span class="blurt__name">' . $name . '</span>';
     echo '<span class="blurt__time">' . h(date('Y-m-d H:i', $created)) . '</span>';
+    echo '<span class="blurt__expiry">' . h(expiry_label(blurt_expires_at($rec))) . '</span>';
     if ($isReply) {
         echo '<span class="admin-tag">reply</span>';
     }
@@ -209,10 +213,12 @@ function admin_action_form(string $action, string $id, string $label, string $bt
     <footer class="site-footer"><a href="index.php">&larr; Back to feed</a></footer>
   <?php else: ?>
     <?php
-      $visible = load_all_visible();
+      $now = time();
+      $notExpired = static fn($r) => !blurt_is_expired($r, $now);
+      $visible = array_filter(load_all_visible(), $notExpired);
       // Newest first for the admin view.
       usort($visible, static fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
-      $hidden = load_all_hidden();
+      $hidden = array_filter(load_all_hidden(), $notExpired);
       usort($hidden, static fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
       $reportedCount = 0;
       foreach ($visible as $v) {

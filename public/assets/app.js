@@ -2,9 +2,9 @@
  * app.js — optional progressive enhancement for Blurt.
  *
  * Everything here is a nicety. The app works fully with JavaScript disabled:
- * this file only adds a live character counter to the compose box. No inline
- * scripts or handlers are used anywhere, so the strict CSP can forbid inline
- * execution entirely.
+ * it adds a live character counter to the compose box and keeps each blurt's
+ * "vanishes in …" countdown fresh. No inline scripts or handlers are used
+ * anywhere, so the strict CSP can forbid inline execution entirely.
  */
 (function () {
   'use strict';
@@ -31,9 +31,41 @@
     update();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wireCounter);
-  } else {
+  // Mirror the server's expiry_label() so the countdown reads consistently.
+  function expiryLabel(expiresAt) {
+    var remaining = expiresAt - Math.floor(Date.now() / 1000);
+    if (remaining <= 0) return 'vanishing…';
+    if (remaining < 60) return 'vanishes in <1m';
+    if (remaining < 3600) return 'vanishes in ' + Math.floor(remaining / 60) + 'm';
+    if (remaining < 86400) return 'vanishes in ' + Math.floor(remaining / 3600) + 'h';
+    return 'vanishes in ' + Math.floor(remaining / 86400) + 'd';
+  }
+
+  function wireCountdowns() {
+    var nodes = document.querySelectorAll('.blurt__expiry[data-expires]');
+    if (!nodes.length) return;
+
+    function tick() {
+      nodes.forEach(function (node) {
+        var expiresAt = parseInt(node.getAttribute('data-expires'), 10);
+        if (!expiresAt) return;
+        node.textContent = expiryLabel(expiresAt);
+      });
+    }
+
+    tick();
+    // Refresh once a minute — enough for an hours/minutes countdown.
+    setInterval(tick, 30000);
+  }
+
+  function init() {
     wireCounter();
+    wireCountdowns();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 })();

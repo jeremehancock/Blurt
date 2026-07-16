@@ -19,6 +19,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     redirect('index.php');
 }
 
+// Opportunistic ephemeral cleanup (throttled, no cron needed).
+maybe_purge_expired();
+
 $genericError = 'Sorry, your blurt couldn\'t be posted. Please try again.';
 
 // --- CSRF + time-trap (one field pair covers both) -------------------------
@@ -62,6 +65,11 @@ if ($rawParent !== '') {
     $parent = read_blurt_file($found['path']);
     if ($parent === null || ($parent['parent_id'] ?? null) !== null) {
         // Keep replies single-level: cannot reply to a reply.
+        set_flash('error', $genericError);
+        redirect('index.php');
+    }
+    if (blurt_is_expired($parent)) {
+        // The parent has vanished (or is about to); don't orphan a reply on it.
         set_flash('error', $genericError);
         redirect('index.php');
     }
