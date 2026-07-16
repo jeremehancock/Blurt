@@ -1,0 +1,4 @@
+# Blurt has no build step and no dependencies.
+# Ignore stray temp files only.
+*.tmp
+*.tmp.*
