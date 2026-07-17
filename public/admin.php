@@ -180,6 +180,7 @@ function admin_action_form(string $action, string $id, string $label, string $bt
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin &middot; <?= h(SITE_TITLE) ?></title>
+<?= favicon_link() ?>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>

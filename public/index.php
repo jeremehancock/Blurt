@@ -174,6 +174,7 @@ function hp_field(): string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= h(SITE_TITLE) ?></title>
+<?= favicon_link() ?>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body data-ttl="<?= (int) POST_TTL ?>">

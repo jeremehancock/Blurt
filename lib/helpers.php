@@ -217,6 +217,34 @@ function render_blurt_text(string $raw): string
 }
 
 /**
+ * The site favicon as an inline SVG: a gradient speech bubble with three dots
+ * (the same "typing bubble" mark used in the header). Returned as raw SVG.
+ */
+function favicon_svg(): string
+{
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+        . '<defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1">'
+        . '<stop offset="0" stop-color="#7c3aed"/>'
+        . '<stop offset="1" stop-color="#db2777"/></linearGradient></defs>'
+        . '<path fill="url(#b)" d="M6 3h20a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H14l-6 6v-6H6'
+        . 'a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/>'
+        . '<circle cx="11" cy="12" r="2.3" fill="#fff"/>'
+        . '<circle cx="16" cy="12" r="2.3" fill="#fff"/>'
+        . '<circle cx="21" cy="12" r="2.3" fill="#fff"/></svg>';
+}
+
+/**
+ * Render the favicon <link> using an inline (data-URI) SVG. The SVG is
+ * URL-encoded, so the `#` in colors/gradient refs is escaped (%23) and won't
+ * be mistaken for a data-URI fragment. Allowed by the CSP (img-src data:).
+ */
+function favicon_link(): string
+{
+    return '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,'
+        . rawurlencode(favicon_svg()) . '">';
+}
+
+/**
  * Render a poster's identity avatar: a colored circle with their handle's
  * initial. The color is applied via a stylesheet class (color_class), NOT an
  * inline style, so the strict no-inline CSP stays intact. The initial is
