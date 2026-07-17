@@ -120,12 +120,14 @@ a { color: var(--accent); }
 .brand__bubble::after {
   content: "";
   position: absolute;
-  left: 9px;
-  bottom: -6px;
+  left: 6px;
+  bottom: -7px;
   width: 0; height: 0;
-  border: 7px solid transparent;
-  border-top-color: var(--accent-strong);
-  border-bottom: 0;
+  /* Right-triangle tail hanging from the far bottom-left corner: its left
+     edge is vertical (flush with the bubble's left side) and it points down. */
+  border-style: solid;
+  border-width: 8px 8px 0 0;
+  border-color: var(--accent-strong) transparent transparent transparent;
 }
 .brand__bubble i {
   display: block;

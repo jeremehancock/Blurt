@@ -226,8 +226,8 @@ function favicon_svg(): string
         . '<defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1">'
         . '<stop offset="0" stop-color="#7c3aed"/>'
         . '<stop offset="1" stop-color="#db2777"/></linearGradient></defs>'
-        . '<path fill="url(#b)" d="M6 3h20a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H14l-6 6v-6H6'
-        . 'a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/>'
+        . '<path fill="url(#b)" d="M10 4 H22 a4 4 0 0 1 4 4 V16 a4 4 0 0 1 -4 4 '
+        . 'H13 L6 25 V8 a4 4 0 0 1 4 -4 Z"/>'
         . '<circle cx="11" cy="12" r="2.3" fill="#fff"/>'
         . '<circle cx="16" cy="12" r="2.3" fill="#fff"/>'
         . '<circle cx="21" cy="12" r="2.3" fill="#fff"/></svg>';
