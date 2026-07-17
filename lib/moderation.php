@@ -64,10 +64,11 @@ function text_length(string $text): int
 }
 
 /**
- * Case-insensitive, word-boundary-aware blocklist match.
- * Returns true if any blocked term appears as a whole word/phrase.
+ * Censor blocklisted terms in-place instead of rejecting the whole post:
+ * each case-insensitive, word-boundary match is replaced with asterisks of the
+ * same length. This lets people post while still masking flagged words.
  */
-function contains_blocked_term(string $text): bool
+function censor_blocked_terms(string $text): string
 {
     foreach (blocklist_terms() as $term) {
         $term = trim($term);
@@ -75,11 +76,24 @@ function contains_blocked_term(string $text): bool
             continue;
         }
         $pattern = '/(?<![\p{L}\p{N}])' . preg_quote($term, '/') . '(?![\p{L}\p{N}])/iu';
-        if (preg_match($pattern, $text) === 1) {
-            return true;
-        }
+        $text = preg_replace_callback($pattern, static function (array $m): string {
+            $len = function_exists('mb_strlen') ? mb_strlen($m[0], 'UTF-8') : strlen($m[0]);
+            return str_repeat('*', max(1, $len));
+        }, $text) ?? $text;
     }
-    return false;
+    return $text;
+}
+
+/** The fixed set of emoji a visitor may react with (server-side whitelist). */
+function reaction_emojis(): array
+{
+    return ['👍', '👎', '❤️', '😂', '😮', '😢'];
+}
+
+/** True only for an emoji in the whitelist above. */
+function is_valid_reaction(string $emoji): bool
+{
+    return in_array($emoji, reaction_emojis(), true);
 }
 
 /**
@@ -97,10 +111,8 @@ function validate_post_text(string $text): ?string
     if (text_length($text) > MAX_POST_LEN) {
         return 'That blurt is too long.';
     }
-    if (contains_blocked_term($text)) {
-        // Deliberately generic — never reveal which word matched.
-        return 'Your blurt couldn\'t be posted.';
-    }
+    // Blocklisted words are censored at store time (see censor_blocked_terms),
+    // not rejected — so length is the only content reason to bounce a post.
     return null;
 }
 
@@ -128,34 +140,45 @@ function time_trap_ok(array $post, string $field = 'rendered_at'): bool
 // handle). Each client only ever contends with its own per-client file.
 // ---------------------------------------------------------------------------
 
-/** Path to the rate file for a given author hash (hash is [0-9a-f]{64}). */
-function rate_file_path(string $authorHash): ?string
+/**
+ * Path to the rate file for a client. An optional $bucket namespaces the file
+ * (e.g. "react") so different action types don't share one budget.
+ * Hash is [0-9a-f]{64}; bucket is a short [a-z] slug.
+ */
+function rate_file_path(string $authorHash, string $bucket = ''): ?string
 {
     if (preg_match('/^[0-9a-f]{64}$/', $authorHash) !== 1) {
         return null;
     }
-    return RATE_DIR . '/' . $authorHash . '.json';
+    $suffix = '';
+    if ($bucket !== '') {
+        if (preg_match('/^[a-z]{1,12}$/', $bucket) !== 1) {
+            return null;
+        }
+        $suffix = '.' . $bucket;
+    }
+    return RATE_DIR . '/' . $authorHash . $suffix . '.json';
 }
 
 /**
- * Return true if the client is currently within the limit (i.e. allowed to
- * post). Does not record the attempt; call rate_limit_record() on success.
+ * Return true if the client is currently within the limit for this bucket.
+ * Does not record the attempt; call rate_limit_record() on success.
  */
-function rate_limit_ok(string $authorHash): bool
+function rate_limit_ok(string $authorHash, int $max = RATE_MAX, string $bucket = ''): bool
 {
-    $timestamps = rate_load($authorHash);
-    return count($timestamps) < RATE_MAX;
+    $timestamps = rate_load($authorHash, $bucket);
+    return count($timestamps) < $max;
 }
 
-/** Record a successful action's timestamp for this client. */
-function rate_limit_record(string $authorHash): void
+/** Record a successful action's timestamp for this client + bucket. */
+function rate_limit_record(string $authorHash, string $bucket = ''): void
 {
     storage_init();
-    $path = rate_file_path($authorHash);
+    $path = rate_file_path($authorHash, $bucket);
     if ($path === null) {
         return;
     }
-    $timestamps = rate_load($authorHash);
+    $timestamps = rate_load($authorHash, $bucket);
     $timestamps[] = time();
     $json = json_encode(array_values($timestamps));
     if ($json !== false) {
@@ -170,9 +193,9 @@ function rate_limit_record(string $authorHash): void
  * Load the client's recent timestamps within the current window, pruning old
  * ones. @return int[]
  */
-function rate_load(string $authorHash): array
+function rate_load(string $authorHash, string $bucket = ''): array
 {
-    $path = rate_file_path($authorHash);
+    $path = rate_file_path($authorHash, $bucket);
     if ($path === null || !is_file($path)) {
         return [];
     }

@@ -2,7 +2,7 @@
 /**
  * index.php — the feed + compose form (server-rendered).
  *
- * Works fully without JavaScript: the compose form and every reply/report
+ * Works fully without JavaScript: the compose form and every reply/react
  * control are plain POST forms. app.js only layers on small niceties.
  */
 
@@ -15,6 +15,10 @@ start_app_session();
 ensure_identity();
 
 $flash = take_flash();
+
+// The blurt just posted by this visitor (if any) — pops into view on load.
+$justPosted = (string) ($_SESSION['just_posted'] ?? '');
+unset($_SESSION['just_posted']);
 
 // Blurts are ephemeral: sweep away anything past its lifetime (lazy, no cron).
 maybe_purge_expired();
@@ -59,7 +63,7 @@ $pageItems = array_slice($topLevel, $offset, PER_PAGE);
 /**
  * Render a single blurt (top-level or reply).
  */
-function render_blurt(array $rec, bool $isReply): void
+function render_blurt(array $rec, bool $isReply, string $justPosted = '', int $page = 1): void
 {
     $name = h((string) ($rec['display_name'] ?? 'Anon'));
     $color = (string) ($rec['display_color'] ?? '#666666');
@@ -69,14 +73,16 @@ function render_blurt(array $rec, bool $isReply): void
     $id = (string) ($rec['id'] ?? '');
     $created = (int) ($rec['created_at'] ?? 0);
     $expiresAt = blurt_expires_at($rec);
-    $reportCount = (int) ($rec['report_count'] ?? 0);
     $textHtml = render_blurt_text((string) ($rec['text'] ?? ''));
 
     // Freshness drives the "fade as it ages" look; data-expires lets app.js
     // keep both the fade and the countdown live.
     $bucket = freshness_bucket($expiresAt);
-    $classes = 'blurt age-' . $bucket . ($isReply ? ' blurt--reply' : '');
-    echo '<article class="' . $classes . '" data-expires="' . (int) $expiresAt . '">';
+    $pop = ($id !== '' && $id === $justPosted) ? ' blurt--pop' : '';
+    $classes = 'blurt age-' . $bucket . ($isReply ? ' blurt--reply' : '') . $pop;
+    $anchor = $id !== '' ? ' id="b-' . h($id) . '"' : '';
+    echo '<article class="' . $classes . '"' . $anchor
+        . ' data-expires="' . (int) $expiresAt . '">';
 
     // Left column: the poster's colored initial avatar.
     echo avatar_html($rec['display_name'] ?? '', $color, $isReply ? 'sm' : 'md');
@@ -90,15 +96,14 @@ function render_blurt(array $rec, bool $isReply): void
     $urgent = $bucket >= 4 ? ' is-urgent' : '';
     echo '<span class="blurt__expiry' . $urgent . '">' . icon_clock()
         . '<span class="lbl">' . h(expiry_label($expiresAt)) . '</span></span>';
-    if ($reportCount >= 1) {
-        // Public badge only — never expose the count.
-        echo '<span class="blurt__badge" title="This blurt has been reported">reported</span>';
-    }
     echo '</header>';
 
     echo '<div class="blurt__bubble"><div class="blurt__text">' . $textHtml . '</div></div>';
 
     echo '<footer class="blurt__actions">';
+    if ($id !== '') {
+        reaction_bar($id, $rec, $page);
+    }
     if (!$isReply && $id !== '') {
         // Reply affordance — a plain <details> so it works with JS disabled.
         echo '<details class="reply">';
@@ -113,18 +118,59 @@ function render_blurt(array $rec, bool $isReply): void
         echo '</form>';
         echo '</details>';
     }
-    if ($id !== '') {
-        // Report affordance — a tiny POST form.
-        echo '<form class="report__form" method="post" action="report.php">';
-        echo csrf_fields();
-        echo '<input type="hidden" name="id" value="' . h($id) . '">';
-        echo '<button type="submit" class="act">' . icon_flag() . '<span>Report</span></button>';
-        echo '</form>';
-    }
     echo '</footer>';
 
     echo '</div>'; // .blurt__body
     echo '</article>';
+}
+
+/**
+ * Render the emoji reaction bar for a blurt: chips for reactions that already
+ * have a tally, plus an "add reaction" picker. One form, many submit buttons —
+ * works with plain POST; app.js upgrades it to a no-reload toggle.
+ */
+function reaction_bar(string $id, array $rec, int $page): void
+{
+    $reactions = $rec['reactions'] ?? [];
+    if (!is_array($reactions)) {
+        $reactions = [];
+    }
+    $me = current_author_hash();
+
+    echo '<form class="reactions" method="post" action="react.php" data-id="' . h($id) . '">';
+    echo csrf_fields();
+    echo '<input type="hidden" name="id" value="' . h($id) . '">';
+    echo '<input type="hidden" name="page" value="' . (int) $page . '">';
+
+    // Existing tallies, in whitelist order.
+    foreach (reaction_emojis() as $emoji) {
+        $list = (isset($reactions[$emoji]) && is_array($reactions[$emoji])) ? $reactions[$emoji] : [];
+        $count = count($list);
+        if ($count < 1) {
+            continue;
+        }
+        $active = in_array($me, $list, true) ? ' is-active' : '';
+        echo '<button type="submit" name="emoji" value="' . h($emoji) . '" '
+            . 'class="react-chip' . $active . '" data-emoji="' . h($emoji) . '">'
+            . '<span class="react-chip__e">' . h($emoji) . '</span>'
+            . '<span class="react-chip__n">' . (int) $count . '</span></button>';
+    }
+
+    // Add-reaction picker (a plain <details> so it opens without JS).
+    echo '<details class="react-add">';
+    echo '<summary class="react-add__btn" title="Add a reaction">' . icon_addreact() . '</summary>';
+    echo '<div class="react-picker">';
+    foreach (reaction_emojis() as $emoji) {
+        $list = (isset($reactions[$emoji]) && is_array($reactions[$emoji])) ? $reactions[$emoji] : [];
+        $active = in_array($me, $list, true) ? ' is-active' : '';
+        echo '<button type="submit" name="emoji" value="' . h($emoji) . '" '
+            . 'class="react-pick' . $active . '" data-emoji="' . h($emoji) . '">'
+            . h($emoji) . '</button>';
+    }
+    echo '</div>';
+    echo '</details>';
+
+    echo '</form>';
 }
 
 /** Small inline SVG icons (static markup — no CSP concern). */
@@ -136,12 +182,30 @@ function icon_reply(): string
         . '<path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg>';
 }
 
-function icon_flag(): string
+function icon_addreact(): string
 {
-    return '<svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" '
+    return '<svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" '
         . 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
         . 'stroke-linejoin="round" aria-hidden="true">'
-        . '<path d="M4 21V4"/><path d="M4 4h12l-1.6 4L16 12H4"/></svg>';
+        . '<path d="M20.9 12.7A9 9 0 1 1 11.3 3.1"/>'
+        . '<path d="M8.5 14.5a4 4 0 0 0 6 0"/>'
+        . '<path d="M9 9.5h.01M15 9.5h.01"/>'
+        . '<path d="M19 3v5M21.5 5.5h-5"/></svg>';
+}
+
+function icon_check(): string
+{
+    return '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+}
+
+function icon_alert(): string
+{
+    return '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true">'
+        . '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
 }
 
 function icon_clock(): string
@@ -174,6 +238,28 @@ function hp_field(): string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= h(SITE_TITLE) ?></title>
+<?php
+  $ogDesc = SITE_TAGLINE !== ''
+      ? SITE_TAGLINE
+      : 'A tiny anonymous public feed. Post a blurt with no account — everything vanishes in ' . ttl_phrase() . '.';
+  $ogUrl = site_base_url() . '/';
+  $ogImage = site_base_url() . '/assets/og-image.png';
+?>
+<meta name="description" content="<?= h($ogDesc) ?>">
+<meta name="theme-color" content="#7c3aed">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="<?= h(SITE_TITLE) ?>">
+<meta property="og:title" content="<?= h(SITE_TITLE) ?>">
+<meta property="og:description" content="<?= h($ogDesc) ?>">
+<meta property="og:url" content="<?= h($ogUrl) ?>">
+<meta property="og:image" content="<?= h($ogImage) ?>">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="<?= h(SITE_TITLE) ?> — <?= h($ogDesc) ?>">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="<?= h(SITE_TITLE) ?>">
+<meta name="twitter:description" content="<?= h($ogDesc) ?>">
+<meta name="twitter:image" content="<?= h($ogImage) ?>">
 <?= favicon_link() ?>
 <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -196,8 +282,9 @@ function hp_field(): string
   </header>
 
   <?php if ($flash !== null): ?>
-    <div class="flash flash--<?= h($flash['type']) ?>" role="status">
-      <?= h($flash['message']) ?>
+    <div class="flash flash--<?= h($flash['type']) ?>" role="status" data-autohide>
+      <span class="flash__icon"><?= $flash['type'] === 'ok' ? icon_check() : icon_alert() ?></span>
+      <span class="flash__msg"><?= h($flash['message']) ?></span>
     </div>
   <?php endif; ?>
 
@@ -232,7 +319,7 @@ function hp_field(): string
     <?php else: ?>
       <?php foreach ($pageItems as $item): ?>
         <div class="thread">
-          <?php render_blurt($item, false); ?>
+          <?php render_blurt($item, false, $justPosted, $page); ?>
           <?php
             $pid = (string) ($item['id'] ?? '');
             $replies = $repliesByParent[$pid] ?? [];
@@ -240,7 +327,7 @@ function hp_field(): string
           <?php if (!empty($replies)): ?>
             <div class="thread__replies">
               <?php foreach ($replies as $reply): ?>
-                <?php render_blurt($reply, true); ?>
+                <?php render_blurt($reply, true, $justPosted, $page); ?>
               <?php endforeach; ?>
             </div>
           <?php endif; ?>
@@ -266,7 +353,9 @@ function hp_field(): string
   <?php endif; ?>
 
   <footer class="site-footer">
-    <p>No accounts. No history. Everything here is gone in <?= h(ttl_phrase()) ?>.</p>
+    <p class="site-footer__note">No accounts. No history. Everything here is gone in <?= h(ttl_phrase()) ?>.</p>
+    <p class="site-footer__by">An AI project by
+      <a href="https://jeremehancock.com" target="_blank" rel="noopener noreferrer">Jereme Hancock</a>.</p>
   </footer>
 </div>
 <script src="assets/app.js" defer></script>

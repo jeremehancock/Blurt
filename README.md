@@ -14,6 +14,8 @@ and drops in behind an existing Nginx Proxy Manager (NPM) reverse proxy.
   is core to what Blurt is.
 - Each visitor gets an auto-generated per-session handle (e.g. `SwiftOtter42`)
   and accent color so posters are distinguishable — no logins, no usernames.
+- Anyone can **react** to a blurt with an emoji (👍 👎 ❤️ 😂 😮 😢); reactions
+  are deduped per visitor and work with or without JavaScript.
 
 ---
 
@@ -40,12 +42,14 @@ automatically on first write.
 
 Visit `/admin` and log in with the admin password. From there you can:
 
-- see all **visible** blurts, with reported ones marked (`reported ×N`);
-- see all **hidden** blurts and why they're hidden (`admin` or `reports`);
-- **hide** a visible blurt, **restore** a hidden one (resets its reports), or
-  **permanently delete** any blurt.
+- see all **visible** blurts (with their reaction totals);
+- see all **hidden** blurts (`hidden by admin`);
+- **hide** a visible blurt, **restore** a hidden one, or **permanently
+  delete** any blurt.
 
-All admin mutations are POST + CSRF-protected.
+All admin mutations are POST + CSRF-protected. (There is no visitor-facing
+report/flag flow — since every blurt self-deletes within 24 hours, moderation
+is just the admin hide/delete controls plus automatic blocklist censoring.)
 
 ### Generate the admin password hash
 
@@ -90,13 +94,13 @@ defaults and no secrets in source.
 | `MIN_SUBMIT_SECS`      | `2`     | Reject submissions faster than this after the form renders (bot speed-trap). |
 | `RATE_MAX`             | `5`     | Max blurts allowed per client per `RATE_WINDOW`. |
 | `RATE_WINDOW`          | `60`    | Rate-limit window in seconds. |
-| `HIDE_REPORT_THRESHOLD`| `3`     | Distinct reporters needed to auto-hide a blurt. |
+| `REACT_MAX`            | `30`    | Max reactions per client per `RATE_WINDOW` (its own budget, separate from posting). |
 | `PER_PAGE`             | `20`    | Top-level blurts shown per feed page. |
 | `POST_TTL`             | `86400` | Blurt lifetime in seconds. Every blurt (replies included) is removed this long after it was posted. Default is 24 hours. |
 | `PURGE_INTERVAL`       | `60`    | Minimum seconds between expiry sweeps. Cleanup is lazy (no cron); this throttles how often a request triggers a sweep. |
 
-Rate limiting and report-dedupe key off an **IP-based hash**, never the session
-handle — so clearing a cookie won't dodge the limits.
+Rate limiting and reaction-dedupe key off an **IP-based hash**, never the
+session handle — so clearing a cookie won't dodge the limits.
 
 ---
 
@@ -144,22 +148,23 @@ blurt/
   public/            <-- docroot (the only web-facing folder)
     index.php        feed + compose form (server-rendered)
     submit.php       handle a new blurt / reply (POST)
-    report.php       handle a report (POST)
+    react.php        toggle an emoji reaction (POST; JSON when enhanced)
     admin.php        session-gated admin area
     assets/
       style.css
-      app.js         optional enhancement (live char counter)
+      app.js         optional enhancement (char counter, live countdown, reactions)
+      og-image.png   social-share preview image
   lib/               <-- NOT web-accessible
-    helpers.php      escaping, ids, IP resolution, security headers
+    helpers.php      escaping, ids, IP resolution, security headers, avatar/favicon
     storage.php      read/write/list/move/delete blurts; safe id->path; expiry sweep
-    moderation.php   blocklist, honeypot, time-trap, rate limit, normalization
+    moderation.php   blocklist censoring, honeypot, time-trap, rate limit, reactions
     identity.php     per-session handle + color
     auth.php         admin session + CSRF helpers
     blocklist.php    starter blocked-terms list (expand it)
     words.php        adjective/animal wordlists for handles
   data/              <-- NOT web-accessible; created at runtime
     blurts/          visible blurts, one JSON file each
-    hidden/          hidden blurts (3+ reports, or admin-hidden)
+    hidden/          hidden blurts (admin-hidden)
     rate/            per-client rate-limit tracking
   config.php         env vars + tunable constants + bootstrap
   Dockerfile         optional
@@ -174,12 +179,11 @@ chronologically:
 {
   "id": "1721001234-a1b2c3",
   "parent_id": null,
-  "text": "raw user text, stored unescaped",
+  "text": "raw user text, blocklisted words masked",
   "created_at": 1721001234,
   "display_name": "SwiftOtter42",
-  "display_color": "#c2410c",
-  "report_count": 0,
-  "reporter_hashes": [],
+  "display_color": "#7c3aed",
+  "reactions": { "👍": ["<hash>", "<hash>"], "❤️": ["<hash>"] },
   "hidden_by": null,
   "author_hash": "sha256(client_ip + APP_SALT)"
 }
@@ -187,19 +191,36 @@ chronologically:
 
 - Text is stored **raw** and escaped only at output with
   `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')` — the primary XSS defense.
+  Blocklisted words are masked with asterisks before storing (see below).
+- `reactions` maps each whitelisted emoji to the list of `author_hash`es that
+  reacted; the public count is `count()` of that list, so a visitor can't
+  inflate a tally. Empty on a fresh blurt, added lazily on first reaction.
 - `author_hash` never stores a raw IP and is never shown; it exists only so
-  rate limiting and report-dedupe work without retaining PII.
+  rate limiting and reaction-dedupe work without retaining PII.
 - Visibility is determined by which directory the file lives in
-  (`blurts/` vs `hidden/`); `hidden_by` records the reason for the admin view.
+  (`blurts/` vs `hidden/`); `hidden_by` is `null` or `"admin"`.
 
-### Moderation lifecycle
+### Reactions
 
-`normal -> reported (still visible, shows a badge) -> hidden`
+Visitors react with a fixed, server-side whitelist of emoji (👍 👎 ❤️ 😂 😮 😢).
 
-- The first distinct report flags a blurt as reported but keeps it visible.
-- Reaching `HIDE_REPORT_THRESHOLD` distinct reporters moves it to `data/hidden/`
-  with `hidden_by = "reports"`.
-- An admin can hide, restore, or permanently delete any blurt at any time.
+- `react.php` toggles one emoji for the caller: their `author_hash` is added to
+  (or removed from) that emoji's list. Distinct reactors only.
+- Every id is validated through `storage.php`, the emoji is checked against the
+  whitelist, and reactions have their own per-client rate budget (`REACT_MAX`).
+- Works as a plain form POST (redirects back to the blurt); when JavaScript is
+  on, `app.js` submits via `fetch` and toggles the chip with no page reload.
+
+### Moderation
+
+Since every blurt self-deletes within `POST_TTL`, moderation is intentionally
+light — there's no visitor-facing report/flag flow.
+
+- **Blocklist censoring.** Blocklisted words (word-boundary, case-insensitive)
+  are replaced with asterisks at store time, so a post goes through with the
+  flagged words masked rather than being rejected.
+- **Admin controls.** An admin can hide, restore, or permanently delete any
+  blurt at any time (`hidden_by = "admin"`).
 
 ### Ephemerality
 
@@ -238,8 +259,11 @@ are naturally short-lived.
   `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
 - **Input normalization** — strips null bytes, control chars, bidi overrides,
   and zero-width chars; normalizes to NFC; blunts zalgo; caps length and bytes.
-- **CSRF + time-trap** on every form, **honeypot** field, **blocklist**, and
-  **per-IP rate limiting** — all enforced server-side.
+- **CSRF + time-trap** on every form, **honeypot** field, **blocklist
+  censoring**, whitelisted emoji reactions, and **per-IP rate limiting** — all
+  enforced server-side.
+- **Social-share tags** (Open Graph + Twitter card) with a bundled preview
+  image, so a shared link renders a proper card.
 
 ---
 

@@ -89,9 +89,6 @@ function admin_do_action(string $action, string $id): array
                 return ['That blurt is already visible.', 'error'];
             }
             $record = read_blurt_file($found['path']) ?? [];
-            // Restore to a clean slate.
-            $record['report_count'] = 0;
-            $record['reporter_hashes'] = [];
             $record['hidden_by'] = null;
             update_blurt($found['path'], $record);
             $newPath = move_blurt($id, HIDDEN_DIR, BLURTS_DIR);
@@ -122,10 +119,14 @@ function admin_row(array $rec, bool $hidden): void
     }
     $id = (string) ($rec['id'] ?? '');
     $created = (int) ($rec['created_at'] ?? 0);
-    $reportCount = (int) ($rec['report_count'] ?? 0);
-    $hiddenBy = $rec['hidden_by'] ?? null;
     $textHtml = render_blurt_text((string) ($rec['text'] ?? ''));
     $isReply = ($rec['parent_id'] ?? null) !== null;
+    $reactionTotal = 0;
+    foreach (($rec['reactions'] ?? []) as $list) {
+        if (is_array($list)) {
+            $reactionTotal += count($list);
+        }
+    }
 
     echo '<article class="admin-blurt">';
     echo avatar_html($rec['display_name'] ?? '', $color, $isReply ? 'sm' : 'md');
@@ -137,14 +138,12 @@ function admin_row(array $rec, bool $hidden): void
     if ($isReply) {
         echo '<span class="admin-tag">reply</span>';
     }
-    if (!$hidden && $reportCount >= 1) {
-        echo '<span class="blurt__badge">reported &times;' . (int) $reportCount . '</span>';
+    if ($reactionTotal > 0) {
+        echo '<span class="admin-tag">' . (int) $reactionTotal . ' reaction'
+            . ($reactionTotal === 1 ? '' : 's') . '</span>';
     }
     if ($hidden) {
-        $reason = $hiddenBy === 'admin' ? 'hidden by admin'
-            : ($hiddenBy === 'reports' ? 'auto-hidden (reports)' : 'hidden');
-        echo '<span class="admin-tag admin-tag--hidden">' . h($reason)
-            . ' &middot; ' . (int) $reportCount . ' reports</span>';
+        echo '<span class="admin-tag admin-tag--hidden">hidden by admin</span>';
     }
     echo '</header>';
 
@@ -223,16 +222,9 @@ function admin_action_form(string $action, string $id, string $label, string $bt
       usort($visible, static fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
       $hidden = array_filter(load_all_hidden(), $notExpired);
       usort($hidden, static fn($a, $b) => ($b['created_at'] ?? 0) <=> ($a['created_at'] ?? 0));
-      $reportedCount = 0;
-      foreach ($visible as $v) {
-          if ((int) ($v['report_count'] ?? 0) >= 1) {
-              $reportedCount++;
-          }
-      }
     ?>
     <div class="admin-toolbar">
-      <span>Visible: <strong><?= count($visible) ?></strong>
-        (reported: <strong><?= (int) $reportedCount ?></strong>) &middot;
+      <span>Visible: <strong><?= count($visible) ?></strong> &middot;
         Hidden: <strong><?= count($hidden) ?></strong></span>
       <form method="post" action="admin.php" class="admin-action">
         <?= csrf_fields() ?>

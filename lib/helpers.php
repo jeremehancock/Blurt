@@ -217,6 +217,20 @@ function render_blurt_text(string $raw): string
 }
 
 /**
+ * Absolute base URL of the site (scheme + host), used for social-share meta
+ * tags. Host comes from the request; it's validated and escaped by callers.
+ */
+function site_base_url(): string
+{
+    $scheme = is_https() ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    if (!preg_match('/^[A-Za-z0-9.\-:\[\]]{1,255}$/', $host)) {
+        $host = 'localhost';
+    }
+    return $scheme . '://' . $host;
+}
+
+/**
  * The site favicon as an inline SVG: a gradient speech bubble with three dots
  * (the same "typing bubble" mark used in the header). Returned as raw SVG.
  */

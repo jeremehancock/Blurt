@@ -83,9 +83,114 @@
     setInterval(tick, 30000);
   }
 
+  // Fade out and remove the flash toast after a few seconds.
+  function wireFlash() {
+    var flash = document.querySelector('.flash[data-autohide]');
+    if (!flash) return;
+    setTimeout(function () {
+      flash.classList.add('is-leaving');
+      var done = false;
+      var remove = function () { if (!done) { done = true; flash.remove(); } };
+      flash.addEventListener('animationend', remove);
+      setTimeout(remove, 700); // fallback if animationend doesn't fire
+    }, 3200);
+  }
+
+  // Progressive enhancement for reactions: toggle without a page reload.
+  function findByEmoji(nodes, emoji) {
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute('data-emoji') === emoji) return nodes[i];
+    }
+    return null;
+  }
+
+  function makeChip(emoji) {
+    var b = document.createElement('button');
+    b.type = 'submit';
+    b.name = 'emoji';
+    b.value = emoji;
+    b.className = 'react-chip is-active';
+    b.setAttribute('data-emoji', emoji);
+    var e = document.createElement('span');
+    e.className = 'react-chip__e';
+    e.textContent = emoji;
+    var n = document.createElement('span');
+    n.className = 'react-chip__n';
+    n.textContent = '0';
+    b.appendChild(e);
+    b.appendChild(n);
+    return b;
+  }
+
+  function applyReaction(form, data) {
+    var pick = findByEmoji(form.querySelectorAll('.react-pick'), data.emoji);
+    if (pick) pick.classList.toggle('is-active', !!data.reacted);
+
+    var chip = findByEmoji(form.querySelectorAll('.react-chip'), data.emoji);
+    if (data.count > 0) {
+      if (!chip) {
+        chip = makeChip(data.emoji);
+        var addEl = form.querySelector('.react-add');
+        form.insertBefore(chip, addEl);
+      }
+      var n = chip.querySelector('.react-chip__n');
+      if (n) n.textContent = String(data.count);
+      chip.classList.toggle('is-active', !!data.reacted);
+      chip.classList.remove('just-reacted');
+      void chip.offsetWidth; // restart the pop animation
+      chip.classList.add('just-reacted');
+    } else if (chip) {
+      chip.remove();
+    }
+  }
+
+  function closePicker(form) {
+    var d = form.querySelector('.react-add');
+    if (d) d.removeAttribute('open');
+  }
+
+  function wireReactions() {
+    document.querySelectorAll('form.reactions').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        if (form.getAttribute('data-bypass')) return; // native fallback submit
+        var btn = e.submitter;
+        if (!btn || btn.name !== 'emoji') return;
+        e.preventDefault();
+
+        var fd = new FormData(form);
+        fd.set('emoji', btn.value); // the submitter's value isn't auto-included
+
+        fetch(form.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+          body: fd,
+          credentials: 'same-origin'
+        }).then(function (r) {
+          return r.json();
+        }).then(function (data) {
+          if (data && data.ok) {
+            applyReaction(form, data);
+            closePicker(form);
+          } else if (data && data.rate) {
+            closePicker(form); // silently ignore a rate-limit
+          } else {
+            throw new Error('reaction failed');
+          }
+        }).catch(function () {
+          // Fall back to a normal form submission so nothing is lost.
+          form.setAttribute('data-bypass', '1');
+          if (form.requestSubmit) form.requestSubmit(btn);
+          else form.submit();
+        });
+      });
+    });
+  }
+
   function init() {
     wireCounter();
     wireCountdowns();
+    wireFlash();
+    wireReactions();
   }
 
   if (document.readyState === 'loading') {

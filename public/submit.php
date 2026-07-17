@@ -43,14 +43,16 @@ if (!rate_limit_ok($authorHash)) {
     redirect('index.php');
 }
 
-// --- Text: normalize, then validate ----------------------------------------
+// --- Text: normalize, validate, then censor blocklisted words --------------
 $rawText = (string) ($_POST['text'] ?? '');
 $text = normalize_text($rawText);
 $textError = validate_post_text($text);
 if ($textError !== null) {
-    set_flash('error', $genericError);
+    set_flash('error', $textError);
     redirect('index.php');
 }
+// Let the post through, but mask any blocklisted words rather than rejecting.
+$text = censor_blocked_terms($text);
 
 // --- Reply target validation -----------------------------------------------
 $parentId = null;
@@ -84,8 +86,7 @@ $record = [
     'created_at' => time(),
     'display_name' => current_display_name(),
     'display_color' => current_display_color(),
-    'report_count' => 0,
-    'reporter_hashes' => [],
+    'reactions' => new stdClass(), // emoji => [author_hash, …], added on first react
     'hidden_by' => null,
     'author_hash' => $authorHash,
 ];
@@ -98,5 +99,9 @@ if (!create_blurt($record)) {
 // Record the successful post against the rate limit.
 rate_limit_record($authorHash);
 
+// Remember which blurt was just posted so the feed can pop it into view,
+// and jump back to it (works whether it's a top-level blurt or a reply).
+$_SESSION['just_posted'] = $record['id'];
+
 set_flash('ok', $parentId === null ? 'Blurted!' : 'Reply posted!');
-redirect('index.php');
+redirect('index.php#b-' . rawurlencode($record['id']));

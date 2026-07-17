@@ -83,8 +83,9 @@ define('MIN_SUBMIT_SECS', env_int('MIN_SUBMIT_SECS', 2));
 define('RATE_MAX', env_int('RATE_MAX', 5));
 define('RATE_WINDOW', env_int('RATE_WINDOW', 60));
 
-// Number of distinct reporters required to auto-hide a blurt.
-define('HIDE_REPORT_THRESHOLD', env_int('HIDE_REPORT_THRESHOLD', 3));
+// Reaction rate limit: at most REACT_MAX reactions per RATE_WINDOW per client
+// (its own budget, so reacting never eats into the post limit).
+define('REACT_MAX', env_int('REACT_MAX', 30));
 
 // Top-level blurts shown per page in the feed.
 define('PER_PAGE', env_int('PER_PAGE', 20));
