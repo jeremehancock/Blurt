@@ -291,6 +291,34 @@ function expiry_label(int $expiresAt): string
     return 'vanishes in ' . (int) floor($remaining / 86400) . 'd';
 }
 
+/**
+ * Bucket a blurt's remaining life into a freshness level 0–4, where 0 is
+ * freshly posted and 4 is about to vanish. Drives the "fade as it ages" look
+ * (age-N classes) so the feed visibly reflects the ephemeral lifetime.
+ */
+function freshness_bucket(int $expiresAt, ?int $now = null): int
+{
+    $now = $now ?? time();
+    $remaining = $expiresAt - $now;
+    if ($remaining <= 0) {
+        return 4;
+    }
+    $ratio = POST_TTL > 0 ? $remaining / POST_TTL : 1.0;
+    if ($ratio >= 0.60) {
+        return 0;
+    }
+    if ($ratio >= 0.40) {
+        return 1;
+    }
+    if ($ratio >= 0.20) {
+        return 2;
+    }
+    if ($ratio >= 0.08) {
+        return 3;
+    }
+    return 4;
+}
+
 /** Human phrase for the configured lifetime, e.g. "24 hours" / "90 minutes". */
 function ttl_phrase(): string
 {

@@ -72,8 +72,11 @@ function render_blurt(array $rec, bool $isReply): void
     $reportCount = (int) ($rec['report_count'] ?? 0);
     $textHtml = render_blurt_text((string) ($rec['text'] ?? ''));
 
-    $classes = 'blurt' . ($isReply ? ' blurt--reply' : '');
-    echo '<article class="' . $classes . '">';
+    // Freshness drives the "fade as it ages" look; data-expires lets app.js
+    // keep both the fade and the countdown live.
+    $bucket = freshness_bucket($expiresAt);
+    $classes = 'blurt age-' . $bucket . ($isReply ? ' blurt--reply' : '');
+    echo '<article class="' . $classes . '" data-expires="' . (int) $expiresAt . '">';
 
     // Left column: the poster's colored initial avatar.
     echo avatar_html($rec['display_name'] ?? '', $color, $isReply ? 'sm' : 'md');
@@ -83,17 +86,17 @@ function render_blurt(array $rec, bool $isReply): void
     echo '<header class="blurt__head">';
     echo '<span class="blurt__name">' . $name . '</span>';
     echo '<span class="blurt__time">' . h(time_ago($created)) . '</span>';
-    // Ephemeral countdown. Server renders a static value; app.js keeps it live
-    // via the data-expires attribute (both optional — purely informational).
-    echo '<span class="blurt__expiry" data-expires="' . (int) $expiresAt . '">'
-        . h(expiry_label($expiresAt)) . '</span>';
+    // Ephemeral countdown chip. app.js keeps the label + urgency fresh.
+    $urgent = $bucket >= 4 ? ' is-urgent' : '';
+    echo '<span class="blurt__expiry' . $urgent . '">' . icon_clock()
+        . '<span class="lbl">' . h(expiry_label($expiresAt)) . '</span></span>';
     if ($reportCount >= 1) {
         // Public badge only — never expose the count.
         echo '<span class="blurt__badge" title="This blurt has been reported">reported</span>';
     }
     echo '</header>';
 
-    echo '<div class="blurt__text">' . $textHtml . '</div>';
+    echo '<div class="blurt__bubble"><div class="blurt__text">' . $textHtml . '</div></div>';
 
     echo '<footer class="blurt__actions">';
     if (!$isReply && $id !== '') {
@@ -149,6 +152,14 @@ function icon_clock(): string
         . '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 }
 
+function icon_send(): string
+{
+    return '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true">'
+        . '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>';
+}
+
 /** The honeypot field: visually hidden, must be left empty by humans. */
 function hp_field(): string
 {
@@ -165,10 +176,13 @@ function hp_field(): string
 <title><?= h(SITE_TITLE) ?></title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body data-ttl="<?= (int) POST_TTL ?>">
 <div class="wrap">
   <header class="site-header">
-    <h1 class="site-title"><a href="index.php"><?= h(SITE_TITLE) ?></a></h1>
+    <a class="brand" href="index.php" aria-label="<?= h(SITE_TITLE) ?> — home">
+      <span class="brand__bubble" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand__name"><?= h(SITE_TITLE) ?></span>
+    </a>
     <?php if (SITE_TAGLINE !== ''): ?>
       <p class="site-tagline"><?= h(SITE_TAGLINE) ?></p>
     <?php endif; ?>
@@ -187,7 +201,7 @@ function hp_field(): string
       <label class="sr-only" for="compose-text">Write a blurt</label>
       <textarea id="compose-text" name="text" class="compose__text" rows="3"
         maxlength="<?= (int) MAX_POST_LEN ?>"
-        placeholder="What's happening?" required
+        placeholder="Blurt something…" required
         data-maxlen="<?= (int) MAX_POST_LEN ?>"></textarea>
       <div class="compose__bar">
         <span class="compose__identity">
@@ -195,7 +209,7 @@ function hp_field(): string
           <span>posting as <strong><?= h(current_display_name()) ?></strong></span>
         </span>
         <span class="compose__count" data-count aria-hidden="true"><?= (int) MAX_POST_LEN ?></span>
-        <button type="submit" class="btn btn--primary">Blurt</button>
+        <button type="submit" class="btn btn--primary"><?= icon_send() ?><span>Blurt</span></button>
       </div>
       <p class="compose__note"><?= icon_clock() ?> Every blurt vanishes <?= h(ttl_phrase()) ?> after it's posted.</p>
     </form>
@@ -203,7 +217,11 @@ function hp_field(): string
 
   <section class="feed">
     <?php if (empty($pageItems)): ?>
-      <p class="empty">Nothing here right now — everything vanishes within <?= h(ttl_phrase()) ?>. Be the first to blurt something.</p>
+      <div class="empty">
+        <span class="empty__bubble" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="empty__lead">It's quiet in here.</p>
+        <p class="empty__sub">Everything vanishes within <?= h(ttl_phrase()) ?> — go ahead, be the first to blurt something.</p>
+      </div>
     <?php else: ?>
       <?php foreach ($pageItems as $item): ?>
         <div class="thread">

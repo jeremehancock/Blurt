@@ -217,9 +217,11 @@ removed — this is a defining feature, not just cleanup.
   before the next sweep deletes its file.
 - **Replies count too.** A reply lives 24 hours from when *it* was posted, and
   you can't reply to a blurt that has already expired.
-- **Visible countdown.** Each blurt shows a subtle "vanishes in 23h" indicator
-  (kept live by `app.js` when JavaScript is on), and the compose box notes the
-  lifetime — so the ephemerality is always visible, never a surprise.
+- **Visible countdown + fade.** Each blurt shows a "vanishes in 23h" chip that
+  turns urgent in its final stretch, and every blurt gently fades as it nears
+  its vanishing time (both kept live by `app.js` when JavaScript is on). The
+  compose box notes the lifetime too — so the ephemerality is always visible,
+  never a surprise.
 
 Because everything self-expires, `data/` stays small on its own and backups
 are naturally short-lived.
