@@ -253,7 +253,7 @@ function favicon_link(): string
 function avatar_html(string $name, string $color, string $variant = 'md'): string
 {
     if (!valid_hex_color($color)) {
-        $color = '#374151';
+        $color = '#7c3aed';
     }
     $trimmed = trim($name);
     if ($trimmed === '') {

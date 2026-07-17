@@ -446,28 +446,22 @@ a { color: var(--accent); }
 /* Identity color palette — single source of truth is identity_palette() in
    lib/identity.php; keep these in sync. Applied via class (color_class) so
    avatar colors never need an inline style, keeping the strict CSP intact. */
-.sw-0  { background-color: #b91c1c; }
-.sw-1  { background-color: #c2410c; }
-.sw-2  { background-color: #b45309; }
-.sw-3  { background-color: #a16207; }
-.sw-4  { background-color: #4d7c0f; }
-.sw-5  { background-color: #15803d; }
-.sw-6  { background-color: #047857; }
-.sw-7  { background-color: #0f766e; }
-.sw-8  { background-color: #0e7490; }
-.sw-9  { background-color: #0369a1; }
-.sw-10 { background-color: #1d4ed8; }
-.sw-11 { background-color: #4338ca; }
-.sw-12 { background-color: #6d28d9; }
-.sw-13 { background-color: #7e22ce; }
-.sw-14 { background-color: #a21caf; }
-.sw-15 { background-color: #be185d; }
-.sw-16 { background-color: #be123c; }
-.sw-17 { background-color: #db2777; }
-.sw-18 { background-color: #7c3aed; }
-.sw-19 { background-color: #2563eb; }
-.sw-20 { background-color: #059669; }
-.sw-21 { background-color: #374151; }
+.sw-0  { background-color: #4338ca; }
+.sw-1  { background-color: #4f46e5; }
+.sw-2  { background-color: #5b21b6; }
+.sw-3  { background-color: #6d28d9; }
+.sw-4  { background-color: #7c3aed; }
+.sw-5  { background-color: #581c87; }
+.sw-6  { background-color: #6b21a8; }
+.sw-7  { background-color: #7e22ce; }
+.sw-8  { background-color: #9333ea; }
+.sw-9  { background-color: #86198f; }
+.sw-10 { background-color: #a21caf; }
+.sw-11 { background-color: #c026d3; }
+.sw-12 { background-color: #831843; }
+.sw-13 { background-color: #9d174d; }
+.sw-14 { background-color: #be185d; }
+.sw-15 { background-color: #db2777; }
 
 /* ---- Reply disclosure -------------------------------------------------- */
 .reply { margin: 0; }

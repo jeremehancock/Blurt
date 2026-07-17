@@ -60,11 +60,13 @@ function generate_handle(): string
  */
 function identity_palette(): array
 {
+    // Kept within Blurt's violet→fuchsia brand family (indigo → violet →
+    // purple → fuchsia → pink) so avatars stay distinguishable yet harmonize
+    // with the theme. Every entry is dark enough for a white initial.
     return [
-        '#b91c1c', '#c2410c', '#b45309', '#a16207', '#4d7c0f', '#15803d',
-        '#047857', '#0f766e', '#0e7490', '#0369a1', '#1d4ed8', '#4338ca',
-        '#6d28d9', '#7e22ce', '#a21caf', '#be185d', '#be123c', '#db2777',
-        '#7c3aed', '#2563eb', '#059669', '#374151',
+        '#4338ca', '#4f46e5', '#5b21b6', '#6d28d9', '#7c3aed', '#581c87',
+        '#6b21a8', '#7e22ce', '#9333ea', '#86198f', '#a21caf', '#c026d3',
+        '#831843', '#9d174d', '#be185d', '#db2777',
     ];
 }
 
