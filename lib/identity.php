@@ -49,65 +49,54 @@ function generate_handle(): string
 }
 
 /**
- * Generate a readable accent color as a validated #rrggbb hex string.
- * We pick a random hue at fixed saturation/lightness so every color has decent
- * contrast against the feed background, then convert HSL -> hex.
+ * A fixed palette of accent colors. Every entry is a medium-dark hue chosen so
+ * white text (the avatar initial) stays legible on it in both light and dark UI.
+ *
+ * These are the single source of truth: each hex here has a matching CSS class
+ * `sw-N` in assets/style.css. Colors are applied via that class (not an inline
+ * style) so the strict CSP — which forbids inline styles — stays intact.
+ *
+ * @return string[]
+ */
+function identity_palette(): array
+{
+    return [
+        '#b91c1c', '#c2410c', '#b45309', '#a16207', '#4d7c0f', '#15803d',
+        '#047857', '#0f766e', '#0e7490', '#0369a1', '#1d4ed8', '#4338ca',
+        '#6d28d9', '#7e22ce', '#a21caf', '#be185d', '#be123c', '#db2777',
+        '#7c3aed', '#2563eb', '#059669', '#374151',
+    ];
+}
+
+/**
+ * Pick a random accent color from the palette. Stored on the record as
+ * display_color (a validated hex), display-only, never used for moderation.
  */
 function generate_accent_color(): string
 {
-    $h = random_int(0, 359) / 360.0;
-    $s = 0.62;
-    $l = 0.42;
-    [$r, $g, $b] = hsl_to_rgb($h, $s, $l);
-    $hex = sprintf('#%02x%02x%02x', $r, $g, $b);
-    // Belt-and-suspenders: only ever return a value matching the strict pattern.
-    return valid_hex_color($hex) ? $hex : '#4b5563';
+    $palette = identity_palette();
+    return $palette[random_int(0, count($palette) - 1)];
+}
+
+/**
+ * Map a stored display_color to its stylesheet class (`sw-N`). Palette colors
+ * resolve to their exact index; any other value (e.g. a legacy hex) is hashed
+ * to a stable palette slot so it still renders a consistent color.
+ */
+function color_class(string $hex): string
+{
+    $palette = identity_palette();
+    $needle = strtolower($hex);
+    foreach ($palette as $i => $c) {
+        if (strtolower($c) === $needle) {
+            return 'sw-' . $i;
+        }
+    }
+    return 'sw-' . (abs(crc32($needle)) % count($palette));
 }
 
 /** Strict validation of a #rrggbb hex color, used before emitting into markup. */
 function valid_hex_color(string $c): bool
 {
     return preg_match('/^#[0-9a-fA-F]{6}$/', $c) === 1;
-}
-
-/**
- * Convert HSL (each 0..1) to an [r,g,b] byte triple.
- * @return array{0:int,1:int,2:int}
- */
-function hsl_to_rgb(float $h, float $s, float $l): array
-{
-    if ($s == 0.0) {
-        $v = (int) round($l * 255);
-        return [$v, $v, $v];
-    }
-    $q = $l < 0.5 ? $l * (1 + $s) : $l + $s - $l * $s;
-    $p = 2 * $l - $q;
-    $r = hue_to_rgb($p, $q, $h + 1 / 3);
-    $g = hue_to_rgb($p, $q, $h);
-    $b = hue_to_rgb($p, $q, $h - 1 / 3);
-    return [
-        (int) round($r * 255),
-        (int) round($g * 255),
-        (int) round($b * 255),
-    ];
-}
-
-function hue_to_rgb(float $p, float $q, float $t): float
-{
-    if ($t < 0) {
-        $t += 1;
-    }
-    if ($t > 1) {
-        $t -= 1;
-    }
-    if ($t < 1 / 6) {
-        return $p + ($q - $p) * 6 * $t;
-    }
-    if ($t < 1 / 2) {
-        return $q;
-    }
-    if ($t < 2 / 3) {
-        return $p + ($q - $p) * (2 / 3 - $t) * 6;
-    }
-    return $p;
 }

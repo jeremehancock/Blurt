@@ -217,6 +217,30 @@ function render_blurt_text(string $raw): string
 }
 
 /**
+ * Render a poster's identity avatar: a colored circle with their handle's
+ * initial. The color is applied via a stylesheet class (color_class), NOT an
+ * inline style, so the strict no-inline CSP stays intact. The initial is
+ * escaped. $variant is one of 'md' (feed) or 'sm' (reply/compose).
+ */
+function avatar_html(string $name, string $color, string $variant = 'md'): string
+{
+    if (!valid_hex_color($color)) {
+        $color = '#374151';
+    }
+    $trimmed = trim($name);
+    if ($trimmed === '') {
+        $initial = '?';
+    } elseif (function_exists('mb_substr')) {
+        $initial = mb_strtoupper(mb_substr($trimmed, 0, 1, 'UTF-8'), 'UTF-8');
+    } else {
+        $initial = strtoupper(substr($trimmed, 0, 1));
+    }
+    $cls = 'avatar avatar--' . ($variant === 'sm' ? 'sm' : 'md')
+        . ' ' . color_class($color);
+    return '<span class="' . $cls . '" aria-hidden="true">' . h($initial) . '</span>';
+}
+
+/**
  * Format a unix timestamp as a compact "time ago" string for the feed.
  * Purely cosmetic.
  */

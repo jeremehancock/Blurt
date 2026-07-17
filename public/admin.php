@@ -128,8 +128,9 @@ function admin_row(array $rec, bool $hidden): void
     $isReply = ($rec['parent_id'] ?? null) !== null;
 
     echo '<article class="admin-blurt">';
+    echo avatar_html($rec['display_name'] ?? '', $color, $isReply ? 'sm' : 'md');
+    echo '<div class="blurt__body">';
     echo '<header class="blurt__head">';
-    echo '<span class="blurt__dot" style="background-color:' . h($color) . '"></span>';
     echo '<span class="blurt__name">' . $name . '</span>';
     echo '<span class="blurt__time">' . h(date('Y-m-d H:i', $created)) . '</span>';
     echo '<span class="blurt__expiry">' . h(expiry_label(blurt_expires_at($rec))) . '</span>';
@@ -157,6 +158,7 @@ function admin_row(array $rec, bool $hidden): void
     }
     admin_action_form('delete', $id, 'Delete', 'btn--danger');
     echo '</footer>';
+    echo '</div>'; // .blurt__body
     echo '</article>';
 }
 

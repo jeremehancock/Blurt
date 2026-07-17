@@ -75,9 +75,12 @@ function render_blurt(array $rec, bool $isReply): void
     $classes = 'blurt' . ($isReply ? ' blurt--reply' : '');
     echo '<article class="' . $classes . '">';
 
+    // Left column: the poster's colored initial avatar.
+    echo avatar_html($rec['display_name'] ?? '', $color, $isReply ? 'sm' : 'md');
+
+    echo '<div class="blurt__body">';
+
     echo '<header class="blurt__head">';
-    // display_color is a validated hex; safe to place in the style attribute.
-    echo '<span class="blurt__dot" style="background-color:' . h($color) . '"></span>';
     echo '<span class="blurt__name">' . $name . '</span>';
     echo '<span class="blurt__time">' . h(time_ago($created)) . '</span>';
     // Ephemeral countdown. Server renders a static value; app.js keeps it live
@@ -96,13 +99,13 @@ function render_blurt(array $rec, bool $isReply): void
     if (!$isReply && $id !== '') {
         // Reply affordance — a plain <details> so it works with JS disabled.
         echo '<details class="reply">';
-        echo '<summary class="btn btn--link">Reply</summary>';
+        echo '<summary class="act">' . icon_reply() . '<span>Reply</span></summary>';
         echo '<form class="reply__form" method="post" action="submit.php">';
         echo csrf_fields();
         echo '<input type="hidden" name="parent_id" value="' . h($id) . '">';
         echo hp_field();
         echo '<textarea name="text" class="reply__text" rows="2" maxlength="'
-            . (int) MAX_POST_LEN . '" placeholder="Post your reply" required></textarea>';
+            . (int) MAX_POST_LEN . '" placeholder="Post your reply…" required></textarea>';
         echo '<button type="submit" class="btn btn--primary btn--small">Reply</button>';
         echo '</form>';
         echo '</details>';
@@ -112,12 +115,38 @@ function render_blurt(array $rec, bool $isReply): void
         echo '<form class="report__form" method="post" action="report.php">';
         echo csrf_fields();
         echo '<input type="hidden" name="id" value="' . h($id) . '">';
-        echo '<button type="submit" class="btn btn--link btn--muted">Report</button>';
+        echo '<button type="submit" class="act">' . icon_flag() . '<span>Report</span></button>';
         echo '</form>';
     }
     echo '</footer>';
 
+    echo '</div>'; // .blurt__body
     echo '</article>';
+}
+
+/** Small inline SVG icons (static markup — no CSP concern). */
+function icon_reply(): string
+{
+    return '<svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true">'
+        . '<path d="M9 17l-5-5 5-5"/><path d="M4 12h11a5 5 0 0 1 5 5v1"/></svg>';
+}
+
+function icon_flag(): string
+{
+    return '<svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true">'
+        . '<path d="M4 21V4"/><path d="M4 4h12l-1.6 4L16 12H4"/></svg>';
+}
+
+function icon_clock(): string
+{
+    return '<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" '
+        . 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        . 'stroke-linejoin="round" aria-hidden="true">'
+        . '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 }
 
 /** The honeypot field: visually hidden, must be left empty by humans. */
@@ -162,13 +191,13 @@ function hp_field(): string
         data-maxlen="<?= (int) MAX_POST_LEN ?>"></textarea>
       <div class="compose__bar">
         <span class="compose__identity">
-          <span class="blurt__dot" style="background-color:<?= h(current_display_color()) ?>"></span>
-          posting as <strong><?= h(current_display_name()) ?></strong>
+          <?= avatar_html(current_display_name(), current_display_color(), 'sm') ?>
+          <span>posting as <strong><?= h(current_display_name()) ?></strong></span>
         </span>
         <span class="compose__count" data-count aria-hidden="true"><?= (int) MAX_POST_LEN ?></span>
         <button type="submit" class="btn btn--primary">Blurt</button>
       </div>
-      <p class="compose__note">Every blurt vanishes <?= h(ttl_phrase()) ?> after it's posted.</p>
+      <p class="compose__note"><?= icon_clock() ?> Every blurt vanishes <?= h(ttl_phrase()) ?> after it's posted.</p>
     </form>
   </section>
 
@@ -212,7 +241,7 @@ function hp_field(): string
   <?php endif; ?>
 
   <footer class="site-footer">
-    <a href="admin.php">Admin</a>
+    <p>No accounts. No history. Everything here is gone in <?= h(ttl_phrase()) ?>.</p>
   </footer>
 </div>
 <script src="assets/app.js" defer></script>
