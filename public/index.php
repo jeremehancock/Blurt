@@ -181,7 +181,13 @@ function hp_field(): string
 <div class="wrap">
   <header class="site-header">
     <a class="brand" href="index.php" aria-label="<?= h(SITE_TITLE) ?> — home">
-      <span class="brand__bubble" aria-hidden="true"><i></i><i></i><i></i></span>
+      <svg class="brand__logo" viewBox="4 2 24 26" aria-hidden="true">
+        <defs><linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop class="g0" offset="0"/><stop class="g1" offset="1"/>
+        </linearGradient></defs>
+        <path fill="url(#brandGrad)" d="M10 4 H22 a4 4 0 0 1 4 4 V16 a4 4 0 0 1 -4 4 H13 L6 25 V8 a4 4 0 0 1 4 -4 Z"/>
+        <circle cx="11" cy="12" r="2.4"/><circle cx="16" cy="12" r="2.4"/><circle cx="21" cy="12" r="2.4"/>
+      </svg>
       <span class="brand__name"><?= h(SITE_TITLE) ?></span>
     </a>
     <?php if (SITE_TAGLINE !== ''): ?>

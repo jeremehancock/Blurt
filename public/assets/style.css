@@ -107,40 +107,31 @@ a { color: var(--accent); }
   gap: 13px;
   text-decoration: none;
 }
-.brand__bubble {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 11px 13px;
-  background: var(--grad);
-  border-radius: 16px 16px 16px 5px;
-  box-shadow: 0 10px 22px -10px rgba(124, 58, 237, 0.65);
-}
-.brand__bubble::after {
-  content: "";
-  position: absolute;
-  left: 6px;
-  bottom: -7px;
-  width: 0; height: 0;
-  /* Right-triangle tail hanging from the far bottom-left corner: its left
-     edge is vertical (flush with the bubble's left side) and it points down. */
-  border-style: solid;
-  border-width: 8px 8px 0 0;
-  border-color: var(--accent-strong) transparent transparent transparent;
-}
-.brand__bubble i {
+/* Logo: an inline SVG chat bubble (identical shape to the favicon) with a
+   built-in bottom-left tail, so header and favicon always match. Its three
+   dots blink as a little typing animation. */
+.brand__logo {
+  width: 46px;
+  height: auto;
+  aspect-ratio: 24 / 26;
   display: block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #fff;
+  filter: drop-shadow(0 9px 16px rgba(124, 58, 237, 0.5));
+}
+.brand__logo .g0 { stop-color: #7c3aed; }
+.brand__logo .g1 { stop-color: #db2777; }
+.brand__logo circle {
+  fill: #fff;
   animation: blink 1.4s infinite both;
 }
-.brand__bubble i:nth-child(2) { animation-delay: 0.18s; }
-.brand__bubble i:nth-child(3) { animation-delay: 0.36s; }
+.brand__logo circle:nth-of-type(2) { animation-delay: 0.18s; }
+.brand__logo circle:nth-of-type(3) { animation-delay: 0.36s; }
 @keyframes blink {
-  0%, 70%, 100% { opacity: 0.4; transform: translateY(0); }
-  35% { opacity: 1; transform: translateY(-3px); }
+  0%, 70%, 100% { opacity: 0.45; }
+  35% { opacity: 1; }
+}
+@media (prefers-color-scheme: dark) {
+  .brand__logo .g0 { stop-color: #8b5cf6; }
+  .brand__logo .g1 { stop-color: #e879f9; }
 }
 .brand__name {
   font-size: 2.35rem;
@@ -611,7 +602,7 @@ a { color: var(--accent); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand__bubble i, .empty__bubble i, .blurt__expiry.is-urgent { animation: none; }
+  .brand__logo circle, .empty__bubble i, .blurt__expiry.is-urgent { animation: none; }
   .blurt, .avatar, .btn, .compose__text, .reply__text { transition: none; }
   .blurt:hover > .avatar { transform: none; }
 }
