@@ -22,6 +22,19 @@ function ensure_identity(): void
         $_SESSION['display_name'] = generate_handle();
         $_SESSION['display_color'] = generate_accent_color();
     }
+    // A per-session reactor id: each browser session is one distinct reactor,
+    // so reactions are deduped per visitor (NOT per IP). Two people behind the
+    // same proxy/IP each get their own id, and one can never toggle another's
+    // reaction. Resettable by clearing the cookie, which is fine for reactions.
+    if (empty($_SESSION['reactor_id'])) {
+        $_SESSION['reactor_id'] = bin2hex(random_bytes(16));
+    }
+}
+
+/** The current session's reactor id (call ensure_identity() first). */
+function current_reactor_id(): string
+{
+    return (string) ($_SESSION['reactor_id'] ?? '');
 }
 
 /** Current session handle (call ensure_identity() first). */

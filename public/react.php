@@ -54,11 +54,17 @@ if ($found === null || $found['dir'] !== BLURTS_DIR) {
     react_respond($wantsJson, ['ok' => false], $id, $page);
 }
 
+// Rate limiting is an abuse control and stays keyed on the IP-based hash.
 $authorHash = current_author_hash();
-
-// Light, dedicated rate limit so reaction spam can't churn the disk.
 if (!rate_limit_ok($authorHash, REACT_MAX, 'react')) {
     react_respond($wantsJson, ['ok' => false, 'rate' => true], $id, $page);
+}
+
+// Reaction dedupe is keyed on the per-session reactor id, so every visitor is
+// a distinct reactor (even sharing an IP) and can only toggle their OWN entry.
+$reactorId = current_reactor_id();
+if ($reactorId === '') {
+    react_respond($wantsJson, ['ok' => false], $id, $page);
 }
 
 $record = read_blurt_file($found['path']);
@@ -72,13 +78,13 @@ if (!is_array($reactions)) {
 }
 $list = (isset($reactions[$emoji]) && is_array($reactions[$emoji])) ? $reactions[$emoji] : [];
 
-// Toggle: remove if already reacted, otherwise add. Distinct reactors only.
-$pos = array_search($authorHash, $list, true);
+// Toggle only THIS visitor's reaction: remove if they already reacted, else add.
+$pos = array_search($reactorId, $list, true);
 if ($pos !== false) {
     array_splice($list, $pos, 1);
     $reacted = false;
 } else {
-    $list[] = $authorHash;
+    $list[] = $reactorId;
     $reacted = true;
 }
 

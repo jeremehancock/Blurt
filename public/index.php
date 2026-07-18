@@ -135,7 +135,9 @@ function reaction_bar(string $id, array $rec, int $page): void
     if (!is_array($reactions)) {
         $reactions = [];
     }
-    $me = current_author_hash();
+    // "You reacted" highlight keys off the per-session reactor id (matches the
+    // dedupe in react.php), so it reflects only this visitor's own reactions.
+    $me = current_reactor_id();
 
     echo '<form class="reactions" method="post" action="react.php" data-id="' . h($id) . '">';
     echo csrf_fields();
