@@ -99,9 +99,10 @@ if (!create_blurt($record)) {
 // Record the successful post against the rate limit.
 rate_limit_record($authorHash);
 
-// Remember which blurt was just posted so the feed can pop it into view,
-// and jump back to it (works whether it's a top-level blurt or a reply).
+// Remember which blurt was just posted so the feed can pop it into view.
+// No scroll anchor: the feed lands at the top (header + compose in view) and
+// the new blurt — which sorts to the top — simply pops in where it is.
 $_SESSION['just_posted'] = $record['id'];
 
 set_flash('ok', $parentId === null ? 'Blurted!' : 'Reply posted!');
-redirect('index.php#b-' . rawurlencode($record['id']));
+redirect('index.php');
