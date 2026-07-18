@@ -87,7 +87,7 @@ function censor_blocked_terms(string $text): string
 /** The fixed set of emoji a visitor may react with (server-side whitelist). */
 function reaction_emojis(): array
 {
-    return ['👍', '👎', '❤️', '😂', '😮', '😢'];
+    return ['👍', '👎', '❤️', '😂', '😮', '😢', '😡'];
 }
 
 /** True only for an emoji in the whitelist above. */

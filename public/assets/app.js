@@ -186,11 +186,27 @@
     });
   }
 
+  // Close any open reaction picker when tapping/clicking outside it, or on Esc.
+  function wireReactionDismiss() {
+    document.addEventListener('click', function (e) {
+      document.querySelectorAll('details.react-add[open]').forEach(function (d) {
+        if (!d.contains(e.target)) d.removeAttribute('open');
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      document.querySelectorAll('details.react-add[open]').forEach(function (d) {
+        d.removeAttribute('open');
+      });
+    });
+  }
+
   function init() {
     wireCounter();
     wireCountdowns();
     wireFlash();
     wireReactions();
+    wireReactionDismiss();
   }
 
   if (document.readyState === 'loading') {
