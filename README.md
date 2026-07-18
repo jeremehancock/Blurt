@@ -80,10 +80,36 @@ defaults and no secrets in source.
 | Variable              | Default                  | What it does |
 |-----------------------|--------------------------|--------------|
 | `ADMIN_PASSWORD_HASH` | *(empty)*                | bcrypt/argon hash of the admin password. Empty disables admin login. |
-| `APP_SALT`            | `change-me-in-production`| Salt mixed into the IP hash (`author_hash`). **Change this in production.** |
+| `APP_SALT`            | `change-me-in-production`| Secret random string hashed with each visitor's IP so raw IPs are never stored. Optional to run; **set your own in production** (see [below](#about-app_salt)). |
 | `TRUSTED_PROXIES`     | *(empty)*                | Comma-separated proxy IPs whose `X-Forwarded-For` header we trust (e.g. NPM's container/host IP). Empty = trust none. |
 | `SITE_TITLE`          | `Blurt`                  | Site name shown in the header and `<title>`. |
 | `SITE_TAGLINE`        | `Anonymous, and gone in 24 hours.` | Optional line under the header; set empty to hide. |
+
+#### About `APP_SALT`
+
+`APP_SALT` is a secret string that gets hashed together with each visitor's IP
+address to produce the `author_hash` used for rate limiting. This is how Blurt
+avoids ever storing a raw IP — and a secret salt keeps those hashes from being
+reversed back into IPs.
+
+- **Is it required?** No — the app runs without it (it falls back to a built-in
+  default), so you can ignore it for local development. For any public
+  deployment you should **set your own value**, because the default is public
+  and therefore offers no protection.
+- **What should go in it?** Any long, random, secret string — treat it like a
+  password. There's no required format or length, but aim for 32+ random
+  characters. Generate one with either of:
+
+  ```bash
+  php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+  openssl rand -hex 32
+  ```
+
+  Then set it as the `APP_SALT` environment variable (don't commit it to
+  source control).
+- **Set it once and leave it.** It doesn't need to be memorable or rotated.
+  Changing it later just resets everyone's rate-limit counters — harmless, but
+  there's no reason to.
 
 ### Tunable constants
 
