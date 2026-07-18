@@ -31,13 +31,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = (string) ($_POST['action'] ?? '');
 
     if ($action === 'login') {
-        // Login form has no session yet, but still carries a CSRF token.
+        // Failed attempts are rate-limited per client (LOGIN_MAX per
+        // RATE_WINDOW) to blunt password brute-forcing.
+        $loginHash = current_author_hash();
         if (!csrf_check($_POST['csrf_token'] ?? null)) {
             $notice = 'Session expired. Please try again.';
+            $noticeType = 'error';
+        } elseif (!rate_limit_ok($loginHash, LOGIN_MAX, 'login')) {
+            $notice = 'Too many attempts. Please wait a minute.';
             $noticeType = 'error';
         } elseif (admin_login((string) ($_POST['password'] ?? ''))) {
             redirect('admin.php');
         } else {
+            rate_limit_record($loginHash, 'login');
             $notice = 'Incorrect password.';
             $noticeType = 'error';
         }
@@ -185,7 +191,17 @@ function admin_action_form(string $action, string $id, string $label, string $bt
 <body>
 <div class="wrap">
   <header class="site-header">
-    <h1 class="site-title"><a href="index.php"><?= h(SITE_TITLE) ?></a> <small>admin</small></h1>
+    <a class="brand" href="index.php" aria-label="<?= h(SITE_TITLE) ?> — back to feed">
+      <svg class="brand__logo" viewBox="4 2 24 26" aria-hidden="true">
+        <defs><linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop class="g0" offset="0"/><stop class="g1" offset="1"/>
+        </linearGradient></defs>
+        <path fill="url(#brandGrad)" d="M10 4 H22 a4 4 0 0 1 4 4 V16 a4 4 0 0 1 -4 4 H13 L6 25 V8 a4 4 0 0 1 4 -4 Z"/>
+        <circle cx="11" cy="12" r="2.4"/><circle cx="16" cy="12" r="2.4"/><circle cx="21" cy="12" r="2.4"/>
+      </svg>
+      <span class="brand__name"><?= h(SITE_TITLE) ?></span>
+      <span class="brand__badge">admin</span>
+    </a>
   </header>
 
   <?php if ($notice !== null): ?>

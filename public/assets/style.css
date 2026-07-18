@@ -26,6 +26,9 @@
   --badge-ink: #8a4b0a;
   --ring: rgba(124, 58, 237, 0.32);
   --bubble-shadow: 0 2px 3px rgba(30, 20, 60, 0.05), 0 12px 28px -16px rgba(80, 40, 140, 0.30);
+  --fx-fill: rgba(124, 58, 237, 0.10);
+  --fx-line: rgba(124, 58, 237, 0.16);
+  --fx-peak: 0.5;
   --radius: 22px;
   --radius-sm: 14px;
   --maxw: 608px;
@@ -57,6 +60,9 @@
     --badge-ink: #f4c667;
     --ring: rgba(167, 139, 250, 0.42);
     --bubble-shadow: 0 2px 4px rgba(0, 0, 0, 0.45), 0 16px 30px -20px rgba(0, 0, 0, 0.8);
+    --fx-fill: rgba(167, 139, 250, 0.12);
+    --fx-line: rgba(167, 139, 250, 0.22);
+    --fx-peak: 0.6;
   }
 }
 
@@ -71,8 +77,9 @@ body {
   line-height: 1.55;
   min-height: 100vh;
   background:
-    radial-gradient(46% 40% at 100% 3%, rgba(219, 39, 119, 0.10), transparent 62%),
-    radial-gradient(44% 38% at -6% 9%, rgba(124, 58, 237, 0.16), transparent 60%),
+    radial-gradient(52% 44% at 100% 0%, rgba(219, 39, 119, 0.13), transparent 62%),
+    radial-gradient(50% 42% at -8% 6%, rgba(124, 58, 237, 0.20), transparent 60%),
+    radial-gradient(40% 34% at 60% 108%, rgba(124, 58, 237, 0.10), transparent 65%),
     radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.7px) 0 0 / 22px 22px,
     var(--bg);
   background-attachment: fixed;
@@ -80,13 +87,59 @@ body {
 
 a { color: var(--accent); }
 
+::selection { background: rgba(124, 58, 237, 0.25); }
+
+/* Themed, unobtrusive scrollbar (progressive enhancement). */
+@supports (scrollbar-color: red blue) {
+  html { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 5px;
 }
 
+/* Ephemeral bubbles drifting up behind the feed — Blurt's background
+   signature. Purely decorative: no pointer events, hidden from AT, and
+   disabled entirely under prefers-reduced-motion. */
+.fx {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.fx i {
+  position: absolute;
+  bottom: -80px;
+  display: block;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.5), transparent 42%),
+    radial-gradient(circle at 50% 50%, var(--fx-fill), transparent 72%);
+  border: 1px solid var(--fx-line);
+  opacity: 0;
+  animation: bubble-drift var(--dur, 26s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.fx i:nth-child(1) { left: 7%;  width: 26px; height: 26px; --dur: 24s; --delay: 0s; }
+.fx i:nth-child(2) { left: 21%; width: 14px; height: 14px; --dur: 31s; --delay: 9s; }
+.fx i:nth-child(3) { left: 44%; width: 20px; height: 20px; --dur: 27s; --delay: 17s; }
+.fx i:nth-child(4) { left: 71%; width: 32px; height: 32px; --dur: 34s; --delay: 4s; }
+.fx i:nth-child(5) { left: 86%; width: 16px; height: 16px; --dur: 23s; --delay: 13s; }
+.fx i:nth-child(6) { left: 58%; width: 12px; height: 12px; --dur: 29s; --delay: 22s; }
+@keyframes bubble-drift {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  8%   { opacity: var(--fx-peak); }
+  85%  { opacity: var(--fx-peak); }
+  98%  { transform: translateY(-105vh) translateX(14px) scale(1.12); opacity: 0; }
+  100% { transform: translateY(-105vh) translateX(14px) scale(1.15); opacity: 0; }
+}
+
 .wrap {
+  position: relative;
+  z-index: 1;
   max-width: var(--maxw);
   margin: 0 auto;
   padding: 34px 16px 76px;
@@ -116,7 +169,10 @@ a { color: var(--accent); }
   aspect-ratio: 24 / 26;
   display: block;
   filter: drop-shadow(0 9px 16px rgba(124, 58, 237, 0.5));
+  transform: rotate(-6deg);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.brand:hover .brand__logo { transform: rotate(3deg) scale(1.06); }
 .brand__logo .g0 { stop-color: #7c3aed; }
 .brand__logo .g1 { stop-color: #db2777; }
 .brand__logo circle {
@@ -142,12 +198,33 @@ a { color: var(--accent); }
 }
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   .brand__name {
-    background: var(--grad);
+    /* A slowly drifting 3-stop gradient so the wordmark feels alive. */
+    background: linear-gradient(100deg,
+      var(--accent) 0%, var(--accent-2) 40%, var(--accent) 80%);
+    background-size: 250% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
+    animation: grad-drift 9s ease-in-out infinite alternate;
   }
+}
+@keyframes grad-drift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+.brand__badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--ring);
+  padding: 2px 9px;
+  border-radius: 999px;
 }
 .site-tagline {
   margin: 0;
@@ -189,12 +266,20 @@ a { color: var(--accent); }
 
 /* ---- Compose ----------------------------------------------------------- */
 .compose {
-  background: var(--surface);
-  border: 1.5px solid var(--border-strong);
+  /* Gradient border via two painted layers: surface fills the padding box,
+     the brand gradient fills the border box. Makes composing the hero. */
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--grad) border-box;
+  border: 2px solid transparent;
   border-radius: var(--radius);
   padding: 18px;
   margin-bottom: 26px;
   box-shadow: var(--bubble-shadow);
+  transition: box-shadow 0.25s ease;
+}
+.compose:focus-within {
+  box-shadow: 0 4px 8px rgba(30, 20, 60, 0.06), 0 18px 44px -18px rgba(124, 58, 237, 0.45);
 }
 .compose__text,
 .reply__text {
@@ -278,11 +363,26 @@ a { color: var(--accent); }
   transition: transform 0.08s ease, box-shadow 0.16s ease, background 0.16s ease, filter 0.16s ease;
 }
 .btn--primary {
+  position: relative;
+  overflow: hidden;
   background-image: var(--grad);
   color: #fff;
   box-shadow: 0 9px 20px -9px rgba(124, 58, 237, 0.7);
 }
+/* A soft light sweep that glides across on hover. */
+.btn--primary::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -80%;
+  width: 55%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.45s ease;
+  pointer-events: none;
+}
 .btn--primary:hover { filter: brightness(1.06); box-shadow: 0 12px 24px -9px rgba(124, 58, 237, 0.8); transform: translateY(-1px); }
+.btn--primary:hover::after { left: 125%; }
 .btn--primary:active { transform: translateY(1px); }
 .btn--small { padding: 7px 16px; font-size: 0.85rem; }
 .btn--link {
@@ -325,11 +425,14 @@ a { color: var(--accent); }
 .feed { display: flex; flex-direction: column; gap: 20px; }
 
 /* Fade as a blurt approaches its vanishing time. */
+/* Blurts don't just fade — they dissolve: as vanishing approaches they lose
+   opacity AND saturation, with a whisper of blur right at the end, like a
+   bubble evaporating. (Kept subtle so text stays readable to the last.) */
 .age-0 { opacity: 1; }
 .age-1 { opacity: 0.96; }
-.age-2 { opacity: 0.90; }
-.age-3 { opacity: 0.80; }
-.age-4 { opacity: 0.66; }
+.age-2 { opacity: 0.90; filter: saturate(0.95); }
+.age-3 { opacity: 0.80; filter: saturate(0.85); }
+.age-4 { opacity: 0.64; filter: saturate(0.65) blur(0.3px); }
 
 .blurt {
   display: flex;
@@ -380,6 +483,12 @@ a { color: var(--accent); }
   border-radius: 6px 18px 18px 18px;
   padding: 11px 15px;
   box-shadow: var(--bubble-shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.blurt:hover .blurt__bubble {
+  transform: translateY(-1px);
+  border-color: var(--ring);
+  box-shadow: 0 3px 5px rgba(30, 20, 60, 0.06), 0 16px 34px -16px rgba(80, 40, 140, 0.42);
 }
 .blurt__bubble::before {
   content: "";
@@ -706,10 +815,15 @@ a { color: var(--accent); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand__logo circle, .empty__bubble i, .blurt__expiry.is-urgent,
+  .fx { display: none; }
+  .brand__logo circle, .brand__name, .empty__bubble i, .blurt__expiry.is-urgent,
   .flash, .react-picker, .react-chip.just-reacted,
   .blurt--pop > .avatar, .blurt--pop .blurt__bubble { animation: none; }
-  .blurt, .avatar, .btn, .compose__text, .reply__text,
-  .react-chip, .react-pick { transition: none; }
-  .blurt:hover > .avatar { transform: none; }
+  .blurt, .avatar, .btn, .btn--primary::after, .compose, .compose__text,
+  .reply__text, .react-chip, .react-pick, .blurt__bubble,
+  .brand__logo { transition: none; }
+  .blurt:hover > .avatar,
+  .blurt:hover .blurt__bubble,
+  .brand:hover .brand__logo { transform: none; }
+  .brand__logo { transform: none; }
 }

@@ -150,10 +150,56 @@ function create_blurt(array $record): bool
     return write_blurt_file($path, $record);
 }
 
-/** Overwrite an existing blurt file (used e.g. when updating report_count). */
+/** Overwrite an existing blurt file (used by admin hide/restore). */
 function update_blurt(string $path, array $record): bool
 {
     return write_blurt_file($path, $record);
+}
+
+/**
+ * Read-modify-write a blurt under an exclusive lock, so concurrent updates
+ * (e.g. two visitors reacting in the same instant) can't clobber each other.
+ * $fn receives the decoded record and returns the modified record, or null to
+ * abort without writing. Returns the modified record, or null on failure.
+ */
+function modify_blurt(string $path, callable $fn): ?array
+{
+    // 'r+' (not 'c+') so a just-purged blurt isn't recreated as an empty file.
+    $fh = @fopen($path, 'r+');
+    if ($fh === false) {
+        return null;
+    }
+    try {
+        if (!flock($fh, LOCK_EX)) {
+            return null;
+        }
+        $raw = stream_get_contents($fh);
+        $record = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($record)) {
+            return null;
+        }
+        $updated = $fn($record);
+        if (!is_array($updated)) {
+            return null;
+        }
+        $json = json_encode(
+            $updated,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+        );
+        if ($json === false) {
+            return null;
+        }
+        rewind($fh);
+        if (fwrite($fh, $json) === false) {
+            return null;
+        }
+        ftruncate($fh, strlen($json));
+        fflush($fh);
+        return $updated;
+    } finally {
+        flock($fh, LOCK_UN);
+        fclose($fh);
+    }
 }
 
 /**

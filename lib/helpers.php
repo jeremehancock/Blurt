@@ -123,8 +123,8 @@ function resolve_client_ip(): string
 
 /**
  * The invisible moderation identity: sha256(client_ip + APP_SALT).
- * Never shown to users; only powers rate limiting and report dedupe so we
- * never have to retain a raw IP.
+ * Never shown to users; only powers rate limiting (posts, reactions, admin
+ * login attempts) so we never have to retain a raw IP.
  */
 function author_hash_for_ip(string $ip): string
 {

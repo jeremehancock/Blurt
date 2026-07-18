@@ -41,6 +41,26 @@ function env_int(string $key, int $default): int
     return $v === '' ? $default : (int) $v;
 }
 
+/**
+ * Like env_str(), but distinguishes "unset" (null) from "explicitly empty"
+ * (''), for settings where an empty value is meaningful — e.g. setting
+ * SITE_TAGLINE to an empty string to hide the tagline.
+ */
+function env_str_nullable(string $key): ?string
+{
+    $v = getenv($key);
+    if ($v !== false) {
+        return (string) $v;
+    }
+    if (isset($_SERVER[$key])) {
+        return (string) $_SERVER[$key];
+    }
+    if (isset($_ENV[$key])) {
+        return (string) $_ENV[$key];
+    }
+    return null;
+}
+
 // ---------------------------------------------------------------------------
 // Secrets & deployment settings (from environment only).
 // ---------------------------------------------------------------------------
@@ -48,9 +68,11 @@ function env_int(string $key, int $default): int
 // Display name of the site.
 define('SITE_TITLE', env_str('SITE_TITLE', 'Blurt'));
 
-// Optional short tagline under the header. Empty string hides it.
-// Ephemerality is core to Blurt's identity, so the default says so.
-define('SITE_TAGLINE', env_str('SITE_TAGLINE', 'Anonymous, and gone in 24 hours.'));
+// Optional short tagline under the header. Set it to an empty string to hide
+// it (nullable read, so "explicitly empty" is honored rather than falling back
+// to the default). Ephemerality is core to Blurt's identity, so the default
+// says so.
+define('SITE_TAGLINE', env_str_nullable('SITE_TAGLINE') ?? 'Anonymous, and gone in 24 hours.');
 
 // bcrypt/argon hash of the admin password (see README to generate one).
 // Empty by default: admin login is effectively disabled until you set this.
@@ -86,6 +108,10 @@ define('RATE_WINDOW', env_int('RATE_WINDOW', 60));
 // Reaction rate limit: at most REACT_MAX reactions per RATE_WINDOW per client
 // (its own budget, so reacting never eats into the post limit).
 define('REACT_MAX', env_int('REACT_MAX', 30));
+
+// Admin login attempts: at most LOGIN_MAX failed tries per RATE_WINDOW per
+// client, to blunt password brute-forcing.
+define('LOGIN_MAX', env_int('LOGIN_MAX', 5));
 
 // Top-level blurts shown per page in the feed.
 define('PER_PAGE', env_int('PER_PAGE', 20));

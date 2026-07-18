@@ -124,7 +124,9 @@ function honeypot_ok(array $post, string $field = 'website'): bool
 
 /**
  * Time-trap: the form carries a render timestamp; reject submissions that
- * arrive faster than MIN_SUBMIT_SECS (too fast to be a human).
+ * arrive faster than MIN_SUBMIT_SECS (too fast to be a human). Also reject
+ * timestamps from the future or older than a day, so a captured form can't
+ * be replayed indefinitely.
  */
 function time_trap_ok(array $post, string $field = 'rendered_at'): bool
 {
@@ -132,7 +134,8 @@ function time_trap_ok(array $post, string $field = 'rendered_at'): bool
     if ($rendered <= 0) {
         return false;
     }
-    return (time() - $rendered) >= MIN_SUBMIT_SECS;
+    $age = time() - $rendered;
+    return $age >= MIN_SUBMIT_SECS && $age <= 86400;
 }
 
 // ---------------------------------------------------------------------------

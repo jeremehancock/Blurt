@@ -14,7 +14,7 @@ and drops in behind an existing Nginx Proxy Manager (NPM) reverse proxy.
   is core to what Blurt is.
 - Each visitor gets an auto-generated per-session handle (e.g. `SwiftOtter42`)
   and accent color so posters are distinguishable — no logins, no usernames.
-- Anyone can **react** to a blurt with an emoji (👍 👎 ❤️ 😂 😮 😢); reactions
+- Anyone can **react** to a blurt with an emoji (👍 👎 ❤️ 😂 😮 😢 😡); reactions
   are deduped per visitor and work with or without JavaScript.
 
 ---
@@ -121,12 +121,16 @@ reversed back into IPs.
 | `RATE_MAX`             | `5`     | Max blurts allowed per client per `RATE_WINDOW`. |
 | `RATE_WINDOW`          | `60`    | Rate-limit window in seconds. |
 | `REACT_MAX`            | `30`    | Max reactions per client per `RATE_WINDOW` (its own budget, separate from posting). |
+| `LOGIN_MAX`            | `5`     | Max failed admin-login attempts per client per `RATE_WINDOW` (blunts password brute-forcing). |
 | `PER_PAGE`             | `20`    | Top-level blurts shown per feed page. |
 | `POST_TTL`             | `86400` | Blurt lifetime in seconds. Every blurt (replies included) is removed this long after it was posted. Default is 24 hours. |
 | `PURGE_INTERVAL`       | `60`    | Minimum seconds between expiry sweeps. Cleanup is lazy (no cron); this throttles how often a request triggers a sweep. |
 
-Rate limiting and reaction-dedupe key off an **IP-based hash**, never the
-session handle — so clearing a cookie won't dodge the limits.
+All rate limiting (posts, reactions, login attempts) keys off an **IP-based
+hash**, never the session cookie — so clearing a cookie won't dodge the
+limits. Reaction *dedupe* (who already reacted to what) keys off a per-session
+reactor id instead, so every visitor is a distinct reactor even behind a
+shared IP.
 
 ---
 
@@ -209,7 +213,7 @@ chronologically:
   "created_at": 1721001234,
   "display_name": "SwiftOtter42",
   "display_color": "#7c3aed",
-  "reactions": { "👍": ["<hash>", "<hash>"], "❤️": ["<hash>"] },
+  "reactions": { "👍": ["<reactor_id>", "<reactor_id>"], "❤️": ["<reactor_id>"] },
   "hidden_by": null,
   "author_hash": "sha256(client_ip + APP_SALT)"
 }
@@ -218,22 +222,27 @@ chronologically:
 - Text is stored **raw** and escaped only at output with
   `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')` — the primary XSS defense.
   Blocklisted words are masked with asterisks before storing (see below).
-- `reactions` maps each whitelisted emoji to the list of `author_hash`es that
-  reacted; the public count is `count()` of that list, so a visitor can't
-  inflate a tally. Empty on a fresh blurt, added lazily on first reaction.
+- `reactions` maps each whitelisted emoji to the list of per-session reactor
+  ids that reacted; the public count is `count()` of that list, so a visitor
+  can't inflate a tally. Empty on a fresh blurt, added lazily on first reaction.
 - `author_hash` never stores a raw IP and is never shown; it exists only so
-  rate limiting and reaction-dedupe work without retaining PII.
+  rate limiting works without retaining PII.
 - Visibility is determined by which directory the file lives in
   (`blurts/` vs `hidden/`); `hidden_by` is `null` or `"admin"`.
 
 ### Reactions
 
-Visitors react with a fixed, server-side whitelist of emoji (👍 👎 ❤️ 😂 😮 😢).
+Visitors react with a fixed, server-side whitelist of emoji
+(👍 👎 ❤️ 😂 😮 😢 😡).
 
-- `react.php` toggles one emoji for the caller: their `author_hash` is added to
-  (or removed from) that emoji's list. Distinct reactors only.
+- `react.php` toggles one emoji for the caller: their per-session reactor id is
+  added to (or removed from) that emoji's list. Each browser session is one
+  distinct reactor — even behind a shared IP — and nobody can remove another
+  visitor's reaction.
 - Every id is validated through `storage.php`, the emoji is checked against the
   whitelist, and reactions have their own per-client rate budget (`REACT_MAX`).
+- Reaction updates happen under an exclusive file lock, so two visitors
+  reacting in the same instant can't overwrite each other.
 - Works as a plain form POST (redirects back to the blurt); when JavaScript is
   on, `app.js` submits via `fetch` and toggles the chip with no page reload.
 
@@ -285,11 +294,20 @@ are naturally short-lived.
   `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
 - **Input normalization** — strips null bytes, control chars, bidi overrides,
   and zero-width chars; normalizes to NFC; blunts zalgo; caps length and bytes.
-- **CSRF + time-trap** on every form, **honeypot** field, **blocklist
-  censoring**, whitelisted emoji reactions, and **per-IP rate limiting** — all
-  enforced server-side.
+- **CSRF + time-trap** on every form (timestamps are also bounded, so a
+  captured form can't be replayed indefinitely), **honeypot** field,
+  **blocklist censoring**, whitelisted emoji reactions, and **per-IP rate
+  limiting** — all enforced server-side.
+- **Admin login is rate-limited** (`LOGIN_MAX` failed attempts per
+  `RATE_WINDOW` per client) to blunt password brute-forcing, on top of
+  bcrypt via `password_verify()` and session-id rotation on login.
+- **Locked writes** — concurrent reaction updates use an exclusive file lock,
+  so simultaneous visitors can't clobber each other's changes.
 - **Social-share tags** (Open Graph + Twitter card) with a bundled preview
   image, so a shared link renders a proper card.
+
+Small kindness: if a post is rejected (rate limit, size cap), the compose box
+keeps what you typed — drafts are never thrown away.
 
 ---
 

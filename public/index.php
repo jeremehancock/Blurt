@@ -20,6 +20,11 @@ $flash = take_flash();
 $justPosted = (string) ($_SESSION['just_posted'] ?? '');
 unset($_SESSION['just_posted']);
 
+// A draft preserved from a failed post (rate limit, size cap, …) so the
+// visitor's text is never lost. One-shot: shown once, then cleared.
+$draft = (string) ($_SESSION['draft'] ?? '');
+unset($_SESSION['draft']);
+
 // Blurts are ephemeral: sweep away anything past its lifetime (lazy, no cron).
 maybe_purge_expired();
 
@@ -111,6 +116,8 @@ function render_blurt(array $rec, bool $isReply, string $justPosted = '', int $p
         echo '<form class="reply__form" method="post" action="submit.php">';
         echo csrf_fields();
         echo '<input type="hidden" name="parent_id" value="' . h($id) . '">';
+        // Carry the feed page so the reply redirect lands back on this page.
+        echo '<input type="hidden" name="page" value="' . (int) $page . '">';
         echo hp_field();
         echo '<textarea name="text" class="reply__text" rows="2" maxlength="'
             . (int) MAX_POST_LEN . '" placeholder="Post your reply…" required></textarea>';
@@ -266,6 +273,7 @@ function hp_field(): string
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body data-ttl="<?= (int) POST_TTL ?>">
+<div class="fx" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
 <div class="wrap">
   <header class="site-header">
     <a class="brand" href="index.php" aria-label="<?= h(SITE_TITLE) ?> — home">
@@ -298,7 +306,7 @@ function hp_field(): string
       <textarea id="compose-text" name="text" class="compose__text" rows="3"
         maxlength="<?= (int) MAX_POST_LEN ?>"
         placeholder="Blurt something…" required
-        data-maxlen="<?= (int) MAX_POST_LEN ?>"></textarea>
+        data-maxlen="<?= (int) MAX_POST_LEN ?>"><?= h($draft) ?></textarea>
       <div class="compose__bar">
         <span class="compose__identity">
           <?= avatar_html(current_display_name(), current_display_color(), 'sm') ?>
