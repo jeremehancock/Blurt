@@ -1,0 +1,829 @@
+/* Blurt — a playful, distinct chat/speech-bubble feed.
+   Same-origin only; no inline styles (per-poster color comes from .sw-* classes,
+   so the strict CSP that forbids inline styles stays intact). */
+
+:root {
+  --bg: #f3f1fb;
+  --dot: rgba(99, 70, 160, 0.06);
+  --surface: #ffffff;
+  --surface-2: #f5f3fc;
+  --border: #e7e3f2;
+  --border-strong: #d8d2ea;
+  --text: #1a1725;
+  --muted: #6b6780;
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-2: #db2777;
+  --accent-tint: rgba(124, 58, 237, 0.10);
+  --accent-ink: #ffffff;
+  --grad: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+  --thread-line: #ded7f0;
+  --danger: #dc2626;
+  --danger-bg: #fde5e5;
+  --danger-ink: #b42318;
+  --warn: #b45309;
+  --badge-bg: #fde6c7;
+  --badge-ink: #8a4b0a;
+  --ring: rgba(124, 58, 237, 0.32);
+  --bubble-shadow: 0 2px 3px rgba(30, 20, 60, 0.05), 0 12px 28px -16px rgba(80, 40, 140, 0.30);
+  --fx-fill: rgba(124, 58, 237, 0.10);
+  --fx-line: rgba(124, 58, 237, 0.16);
+  --fx-peak: 0.5;
+  --radius: 22px;
+  --radius-sm: 14px;
+  --maxw: 608px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0b12;
+    --dot: rgba(180, 160, 255, 0.055);
+    --surface: #171522;
+    --surface-2: #1e1a2b;
+    --border: #292536;
+    --border-strong: #39344c;
+    --text: #ece9f5;
+    --muted: #a09cb4;
+    --accent: #a78bfa;
+    --accent-strong: #8b5cf6;
+    --accent-2: #e879f9;
+    --accent-tint: rgba(167, 139, 250, 0.15);
+    --grad: linear-gradient(135deg, #8b5cf6 0%, #e879f9 100%);
+    --thread-line: #342f47;
+    --danger: #f87171;
+    --danger-bg: #3a1a1a;
+    --danger-ink: #fca5a5;
+    --warn: #fbbf24;
+    --badge-bg: #3a2c10;
+    --badge-ink: #f4c667;
+    --ring: rgba(167, 139, 250, 0.42);
+    --bubble-shadow: 0 2px 4px rgba(0, 0, 0, 0.45), 0 16px 30px -20px rgba(0, 0, 0, 0.8);
+    --fx-fill: rgba(167, 139, 250, 0.12);
+    --fx-line: rgba(167, 139, 250, 0.22);
+    --fx-peak: 0.6;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.55;
+  min-height: 100vh;
+  background:
+    radial-gradient(52% 44% at 100% 0%, rgba(219, 39, 119, 0.13), transparent 62%),
+    radial-gradient(50% 42% at -8% 6%, rgba(124, 58, 237, 0.20), transparent 60%),
+    radial-gradient(40% 34% at 60% 108%, rgba(124, 58, 237, 0.10), transparent 65%),
+    radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.7px) 0 0 / 22px 22px,
+    var(--bg);
+  background-attachment: fixed;
+}
+
+a { color: var(--accent); }
+
+::selection { background: rgba(124, 58, 237, 0.25); }
+
+/* Themed, unobtrusive scrollbar (progressive enhancement). */
+@supports (scrollbar-color: red blue) {
+  html { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+/* Ephemeral bubbles drifting up behind the feed — Blurt's background
+   signature. Purely decorative: no pointer events, hidden from AT, and
+   disabled entirely under prefers-reduced-motion. */
+.fx {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.fx i {
+  position: absolute;
+  bottom: -80px;
+  display: block;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.5), transparent 42%),
+    radial-gradient(circle at 50% 50%, var(--fx-fill), transparent 72%);
+  border: 1px solid var(--fx-line);
+  opacity: 0;
+  animation: bubble-drift var(--dur, 26s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.fx i:nth-child(1) { left: 7%;  width: 26px; height: 26px; --dur: 24s; --delay: 0s; }
+.fx i:nth-child(2) { left: 21%; width: 14px; height: 14px; --dur: 31s; --delay: 9s; }
+.fx i:nth-child(3) { left: 44%; width: 20px; height: 20px; --dur: 27s; --delay: 17s; }
+.fx i:nth-child(4) { left: 71%; width: 32px; height: 32px; --dur: 34s; --delay: 4s; }
+.fx i:nth-child(5) { left: 86%; width: 16px; height: 16px; --dur: 23s; --delay: 13s; }
+.fx i:nth-child(6) { left: 58%; width: 12px; height: 12px; --dur: 29s; --delay: 22s; }
+@keyframes bubble-drift {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  8%   { opacity: var(--fx-peak); }
+  85%  { opacity: var(--fx-peak); }
+  98%  { transform: translateY(-105vh) translateX(14px) scale(1.12); opacity: 0; }
+  100% { transform: translateY(-105vh) translateX(14px) scale(1.15); opacity: 0; }
+}
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 34px 16px 76px;
+}
+
+/* ---- Header: animated typing-bubble logo + wordmark -------------------- */
+.site-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  text-align: center;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  text-decoration: none;
+}
+/* Logo: an inline SVG chat bubble (identical shape to the favicon) with a
+   built-in bottom-left tail, so header and favicon always match. Its three
+   dots blink as a little typing animation. */
+.brand__logo {
+  width: 46px;
+  height: auto;
+  aspect-ratio: 24 / 26;
+  display: block;
+  filter: drop-shadow(0 9px 16px rgba(124, 58, 237, 0.5));
+  transform: rotate(-6deg);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.brand:hover .brand__logo { transform: rotate(3deg) scale(1.06); }
+.brand__logo .g0 { stop-color: #7c3aed; }
+.brand__logo .g1 { stop-color: #db2777; }
+.brand__logo circle {
+  fill: #fff;
+  animation: blink 1.4s infinite both;
+}
+.brand__logo circle:nth-of-type(2) { animation-delay: 0.18s; }
+.brand__logo circle:nth-of-type(3) { animation-delay: 0.36s; }
+@keyframes blink {
+  0%, 70%, 100% { opacity: 0.45; }
+  35% { opacity: 1; }
+}
+@media (prefers-color-scheme: dark) {
+  .brand__logo .g0 { stop-color: #8b5cf6; }
+  .brand__logo .g1 { stop-color: #e879f9; }
+}
+.brand__name {
+  font-size: 2.35rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--accent-strong);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .brand__name {
+    /* A slowly drifting 3-stop gradient so the wordmark feels alive. */
+    background: linear-gradient(100deg,
+      var(--accent) 0%, var(--accent-2) 40%, var(--accent) 80%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: grad-drift 9s ease-in-out infinite alternate;
+  }
+}
+@keyframes grad-drift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+.brand__badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--ring);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.site-tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+/* ---- Flash toast ------------------------------------------------------- */
+.flash {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 11px 18px;
+  margin-bottom: 18px;
+  font-size: 0.94rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--bubble-shadow);
+  animation: flash-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.flash__icon { display: inline-flex; flex: 0 0 auto; }
+.flash__msg { min-width: 0; }
+.flash--ok { background: #ecfdf5; color: #05603a; border-color: #a7f3d0; }
+.flash--error { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+@media (prefers-color-scheme: dark) {
+  .flash--ok { background: #08291f; color: #6ee7b7; border-color: #0e5a45; }
+  .flash--error { background: #2a1414; color: #fca5a5; border-color: #5b1d1d; }
+}
+.flash.is-leaving { animation: flash-out 0.45s ease forwards; }
+@keyframes flash-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes flash-out {
+  to { opacity: 0; transform: translateY(-8px) scale(0.98); margin-bottom: -46px; }
+}
+
+/* ---- Compose ----------------------------------------------------------- */
+.compose {
+  /* Gradient border via two painted layers: surface fills the padding box,
+     the brand gradient fills the border box. Makes composing the hero. */
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--grad) border-box;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 26px;
+  box-shadow: var(--bubble-shadow);
+  transition: box-shadow 0.25s ease;
+}
+.compose:focus-within {
+  box-shadow: 0 4px 8px rgba(30, 20, 60, 0.06), 0 18px 44px -18px rgba(124, 58, 237, 0.45);
+}
+.compose__text,
+.reply__text {
+  width: 100%;
+  resize: vertical;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 1.02rem;
+  color: var(--text);
+  background: var(--surface-2);
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.compose__text::placeholder,
+.reply__text::placeholder { color: var(--muted); opacity: 0.85; }
+.compose__text:focus,
+.reply__text:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.compose__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.compose__identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-width: 0;
+}
+.compose__identity strong { color: var(--text); font-weight: 700; }
+.compose__count {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.compose__count.is-over { color: var(--danger); font-weight: 700; }
+.compose__note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 13px 2px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.compose__note .ico { color: var(--accent); flex: 0 0 auto; }
+
+/* Honeypot — visually hidden but present in the DOM. */
+.hp {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px; height: 1px;
+  overflow: hidden;
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+  color: var(--text);
+  line-height: 1.15;
+  transition: transform 0.08s ease, box-shadow 0.16s ease, background 0.16s ease, filter 0.16s ease;
+}
+.btn--primary {
+  position: relative;
+  overflow: hidden;
+  background-image: var(--grad);
+  color: #fff;
+  box-shadow: 0 9px 20px -9px rgba(124, 58, 237, 0.7);
+}
+/* A soft light sweep that glides across on hover. */
+.btn--primary::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -80%;
+  width: 55%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.45s ease;
+  pointer-events: none;
+}
+.btn--primary:hover { filter: brightness(1.06); box-shadow: 0 12px 24px -9px rgba(124, 58, 237, 0.8); transform: translateY(-1px); }
+.btn--primary:hover::after { left: 125%; }
+.btn--primary:active { transform: translateY(1px); }
+.btn--small { padding: 7px 16px; font-size: 0.85rem; }
+.btn--link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+.btn--link:hover { background: var(--accent-tint); }
+.btn--warn { background: var(--warn); color: #fff; }
+.btn--danger { background: var(--danger); color: #fff; }
+.btn--warn:hover, .btn--danger:hover { filter: brightness(1.06); }
+.btn--disabled { color: var(--muted); opacity: 0.45; cursor: default; }
+.btn--disabled:hover { background: none; }
+
+/* Compact text-action buttons (Reply / Report) */
+.act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 11px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.act:hover { color: var(--accent); background: var(--accent-tint); }
+.act .ico { flex: 0 0 auto; }
+.ico { display: inline-block; vertical-align: -2px; }
+
+/* ---- Feed / threads ---------------------------------------------------- */
+.feed { display: flex; flex-direction: column; gap: 20px; }
+
+/* Fade as a blurt approaches its vanishing time. */
+/* Blurts don't just fade — they dissolve: as vanishing approaches they lose
+   opacity AND saturation, with a whisper of blur right at the end, like a
+   bubble evaporating. (Kept subtle so text stays readable to the last.) */
+.age-0 { opacity: 1; }
+.age-1 { opacity: 0.96; }
+.age-2 { opacity: 0.90; filter: saturate(0.95); }
+.age-3 { opacity: 0.80; filter: saturate(0.85); }
+.age-4 { opacity: 0.64; filter: saturate(0.65) blur(0.3px); }
+
+.blurt {
+  display: flex;
+  gap: 12px;
+  transition: opacity 0.5s ease;
+}
+.blurt__body { flex: 1 1 auto; min-width: 0; }
+
+.blurt__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 0 6px;
+  padding-left: 2px;
+}
+.blurt__name { font-weight: 800; font-size: 0.94rem; color: var(--text); overflow-wrap: anywhere; }
+.blurt__time { color: var(--muted); font-size: 0.8rem; }
+.blurt__time::before { content: "·"; margin-right: 5px; }
+
+/* Ephemeral countdown chip */
+.blurt__expiry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+}
+.blurt__expiry .ico { width: 12px; height: 12px; opacity: 0.85; }
+.blurt__expiry.is-urgent {
+  color: var(--danger-ink);
+  background: var(--danger-bg);
+  border-color: transparent;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* The message itself, in a speech bubble with a tail pointing at the avatar. */
+.blurt__bubble {
+  position: relative;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px 18px 18px 18px;
+  padding: 11px 15px;
+  box-shadow: var(--bubble-shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.blurt:hover .blurt__bubble {
+  transform: translateY(-1px);
+  border-color: var(--ring);
+  box-shadow: 0 3px 5px rgba(30, 20, 60, 0.06), 0 16px 34px -16px rgba(80, 40, 140, 0.42);
+}
+.blurt__bubble::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 14px;
+  width: 13px; height: 13px;
+  background: var(--surface);
+  border-left: 1.5px solid var(--border-strong);
+  border-bottom: 1.5px solid var(--border-strong);
+  transform: rotate(45deg);
+  border-bottom-left-radius: 3px;
+}
+.blurt__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 1rem;
+  color: var(--text);
+}
+.blurt__text a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.blurt__actions {
+  position: relative; /* positioning context for the reaction picker popover */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  flex-wrap: wrap;
+}
+
+/* ---- Reactions --------------------------------------------------------- */
+.reactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.react-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.react-chip:hover { border-color: var(--accent); background: var(--accent-tint); }
+.react-chip:active { transform: scale(0.93); }
+.react-chip__e { font-size: 0.95rem; line-height: 1; }
+.react-chip__n { font-variant-numeric: tabular-nums; color: var(--muted); }
+.react-chip.is-active {
+  border-color: transparent;
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.react-chip.is-active .react-chip__n { color: var(--accent); }
+.react-chip.just-reacted { animation: react-pop 0.4s cubic-bezier(0.16, 1, 0.5, 1); }
+@keyframes react-pop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+.react-add { margin: 0; display: inline-flex; }
+.react-add__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 26px;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.react-add__btn::-webkit-details-marker { display: none; }
+.react-add__btn:hover,
+.react-add[open] > .react-add__btn { color: var(--accent); background: var(--accent-tint); }
+.react-picker {
+  /* Anchored to the content column (.blurt__actions), not the add button, and
+     capped to the content width with wrapping — so it never runs off-screen,
+     however far right the add button sits or however narrow the viewport. */
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% + 7px);
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  box-shadow: var(--bubble-shadow);
+  animation: pop-in 0.16s ease both;
+}
+.react-pick {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 7px 9px;
+  border-radius: 10px;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.react-pick:hover { background: var(--accent-tint); transform: scale(1.2); }
+.react-pick.is-active { background: var(--accent-tint); box-shadow: inset 0 0 0 1.5px var(--accent); }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- Pop-in for a just-posted blurt ------------------------------------ */
+.blurt--pop > .avatar { animation: avatar-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.blurt--pop .blurt__bubble { animation: bubble-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes bubble-pop {
+  0% { opacity: 0; transform: scale(0.82) translateY(8px); }
+  60% { transform: scale(1.03); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes avatar-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  60% { transform: scale(1.14); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* Replies: dashed rail connects them under the parent, chat-thread style. */
+.thread__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 14px 0 0 21px;
+  padding-left: 25px;
+  border-left: 2px dashed var(--thread-line);
+}
+.blurt--reply .blurt__bubble { background: var(--surface-2); }
+.blurt--reply .blurt__bubble::before { background: var(--surface-2); }
+.blurt--reply .blurt__text { font-size: 0.96rem; }
+
+/* ---- Avatars ----------------------------------------------------------- */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  user-select: none;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 4px 10px -3px rgba(40, 20, 80, 0.4);
+  transition: transform 0.15s ease;
+}
+.avatar--md { width: 44px; height: 44px; font-size: 1.08rem; }
+.avatar--sm { width: 32px; height: 32px; font-size: 0.82rem; }
+.blurt:hover > .avatar { transform: scale(1.06) rotate(-3deg); }
+
+/* Identity color palette — single source of truth is identity_palette() in
+   lib/identity.php; keep these in sync. Applied via class (color_class) so
+   avatar colors never need an inline style, keeping the strict CSP intact. */
+.sw-0  { background-color: #4338ca; }
+.sw-1  { background-color: #4f46e5; }
+.sw-2  { background-color: #5b21b6; }
+.sw-3  { background-color: #6d28d9; }
+.sw-4  { background-color: #7c3aed; }
+.sw-5  { background-color: #581c87; }
+.sw-6  { background-color: #6b21a8; }
+.sw-7  { background-color: #7e22ce; }
+.sw-8  { background-color: #9333ea; }
+.sw-9  { background-color: #86198f; }
+.sw-10 { background-color: #a21caf; }
+.sw-11 { background-color: #c026d3; }
+.sw-12 { background-color: #831843; }
+.sw-13 { background-color: #9d174d; }
+.sw-14 { background-color: #be185d; }
+.sw-15 { background-color: #db2777; }
+
+/* ---- Reply disclosure -------------------------------------------------- */
+.reply { margin: 0; }
+.reply[open] { flex-basis: 100%; }
+.reply > summary {
+  list-style: none;
+  display: inline-flex;
+  cursor: pointer;
+}
+.reply > summary::-webkit-details-marker { display: none; }
+.reply[open] > summary { color: var(--accent); background: var(--accent-tint); }
+.reply__form {
+  margin: 10px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.reply__form .btn { align-self: flex-start; }
+
+/* ---- Empty state: a friendly typing bubble ----------------------------- */
+.empty {
+  text-align: center;
+  padding: 46px 24px;
+  background: var(--surface);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+.empty__bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 13px 16px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 16px 16px 16px 5px;
+}
+.empty__bubble i {
+  display: block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.4s infinite both;
+}
+.empty__bubble i:nth-child(2) { animation-delay: 0.18s; }
+.empty__bubble i:nth-child(3) { animation-delay: 0.36s; }
+.empty__lead { font-weight: 800; font-size: 1.12rem; margin: 16px 0 4px; color: var(--text); }
+.empty__sub { color: var(--muted); margin: 0; font-size: 0.92rem; }
+
+/* ---- Pager ------------------------------------------------------------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 26px;
+}
+.pager__status { color: var(--muted); font-size: 0.9rem; }
+
+/* ---- Footer ------------------------------------------------------------ */
+.site-footer {
+  text-align: center;
+  margin-top: 46px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.site-footer p { margin: 0; }
+.site-footer__by { margin-top: 6px; }
+.site-footer__by a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+.site-footer__by a:hover { text-decoration: underline; }
+
+/* ---- Admin ------------------------------------------------------------- */
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+.admin-toolbar strong { color: var(--text); }
+.admin-heading {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 26px 2px 12px;
+}
+.admin-list { display: flex; flex-direction: column; gap: 12px; }
+.admin-blurt {
+  display: flex;
+  gap: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 15px 17px;
+  box-shadow: var(--bubble-shadow);
+}
+.admin-blurt .blurt__text { margin-top: 2px; }
+.admin-tag {
+  align-self: center;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--muted);
+}
+.admin-tag--hidden { background: var(--badge-bg); color: var(--badge-ink); }
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.admin-action { margin: 0; }
+
+/* ---- Utility ----------------------------------------------------------- */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx { display: none; }
+  .brand__logo circle, .brand__name, .empty__bubble i, .blurt__expiry.is-urgent,
+  .flash, .react-picker, .react-chip.just-reacted,
+  .blurt--pop > .avatar, .blurt--pop .blurt__bubble { animation: none; }
+  .blurt, .avatar, .btn, .btn--primary::after, .compose, .compose__text,
+  .reply__text, .react-chip, .react-pick, .blurt__bubble,
+  .brand__logo { transition: none; }
+  .blurt:hover > .avatar,
+  .blurt:hover .blurt__bubble,
+  .brand:hover .brand__logo { transform: none; }
+  .brand__logo { transform: none; }
+}
